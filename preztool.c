@@ -87,8 +87,7 @@ int main(int argc, char *argv[]) {
     }
 
     // draw
-    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) ||
-        (GetGestureDetected() == GESTURE_DRAG)) {
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
       BeginTextureMode(drawTarget);
       DrawCircleV(mouseWorldPos, 5, drawColors[drawColorSelected]);
       DrawLineEx(prevMouseWorldPos, mouseWorldPos, 10,
