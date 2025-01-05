@@ -1,9 +1,11 @@
 #ifdef _WIN32
 #include "preztool_win32.h"
+#define PIXEL_FORMAT PIXELFORMAT_UNCOMPRESSED_R8G8B8
 #endif // !_WIN32
 
 #ifdef linux
 #include "preztool_x11.h"
+#define PIXEL_FORMAT PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
 #endif // !linux
 
 #include <raylib.h>
@@ -34,7 +36,7 @@ int main(int argc, char *argv[]) {
   Image img = {.width = srcWidth,
                .height = srcHeight,
                .data = data,
-               .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
+               .format = PIXEL_FORMAT,
                .mipmaps = 1};
   Texture screenTexture = LoadTextureFromImage(img);
   UnloadImage(img);
