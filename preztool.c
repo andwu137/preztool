@@ -1,4 +1,11 @@
+#ifdef _WIN32
+#include "preztool_win32.h"
+#endif // !_WIN32
+
+#ifdef linux
 #include "preztool_x11.h"
+#endif // !linux
+
 #include <raylib.h>
 #include <raymath.h>
 #include <rlgl.h>
