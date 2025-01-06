@@ -7,6 +7,17 @@
 enum prez_flags {
   FLAGS_MIRROR_X = 1 << 0,
   FLAGS_MIRROR_Y = 1 << 1,
+  FLAGS_FLASHLIGHT = 1 << 2,
+};
+
+struct flashlight {
+  Vector2 pos;
+  float inner;
+  float outer;
+
+  unsigned int posLoc;
+  unsigned int innerLoc;
+  unsigned int outerLoc;
 };
 
 int main(int argc, char *argv[]) {
@@ -34,39 +45,58 @@ int main(int argc, char *argv[]) {
 
   /* prez data */
   unsigned char prezFlags = 0;
+  // flashlight
+  Shader shdrFlashlight =
+      LoadShader(NULL, "assets/shaders/flashlight.frag.glsl");
+  struct flashlight flashlight = {
+      .pos = {0, 0},
+      .posLoc = GetShaderLocation(shdrFlashlight, "flashlight.pos"),
+      .inner = (float)srcWidth / 15,
+      .innerLoc = GetShaderLocation(shdrFlashlight, "flashlight.inner"),
+      .outer = (float)srcWidth / 15 * 1.5,
+      .outerLoc = GetShaderLocation(shdrFlashlight, "flashlight.outer"),
+  };
+  SetShaderValue(shdrFlashlight, flashlight.innerLoc, &flashlight.inner,
+                 SHADER_UNIFORM_FLOAT);
+  SetShaderValue(shdrFlashlight, flashlight.outerLoc, &flashlight.outer,
+                 SHADER_UNIFORM_FLOAT);
+
   // camera
   Camera2D camera = {};
   camera.zoom = 1.0f;
+
   // draw
   RenderTexture2D drawTarget = LoadRenderTexture(srcWidth, srcHeight);
   Color drawColors[] = {RED, GREEN, BLUE, WHITE, BLACK};
   int drawColorSelected = 0;
+
   // mouse
   Vector2 mousePos;
-  Vector2 prevMousePos;
   Vector2 prevMouseWorldPos;
   Vector2 mouseWorldPos;
 
   while (!WindowShouldClose()) {
     // swap flags
-    if (IsKeyPressed(KEY_A)) {
+    if (IsKeyPressed(KEY_X)) {
       prezFlags ^= FLAGS_MIRROR_X;
 
       // for prev
       mousePos.x = srcWidth - mousePos.x;
       mouseWorldPos.x = srcWidth - mouseWorldPos.x;
     }
-    if (IsKeyPressed(KEY_S)) {
+    if (IsKeyPressed(KEY_V)) {
       prezFlags ^= FLAGS_MIRROR_Y;
 
       // for prev
       mousePos.y = srcHeight - mousePos.y;
       mouseWorldPos.y = srcHeight - mouseWorldPos.y;
     }
+    if (IsKeyPressed(KEY_F)) {
+      prezFlags ^= FLAGS_FLASHLIGHT;
+    }
 
     // mouse init
     Vector2 flipVector = Vector2One();
-    prevMousePos = mousePos;
     mousePos = GetMousePosition();
     prevMouseWorldPos = mouseWorldPos;
     mouseWorldPos = GetScreenToWorld2D(mousePos, camera);
@@ -93,26 +123,39 @@ int main(int argc, char *argv[]) {
       camera.target = Vector2Add(camera.target, delta);
     }
 
-    // zoom
     if (wheel != 0) {
-      // cursor relation
-      Vector2 mousePos = GetMousePosition();
-      Vector2 mouseWorldPos = GetScreenToWorld2D(mousePos, camera);
-      camera.offset = mousePos;
-      camera.target = mouseWorldPos;
+      if (IsKeyDown(KEY_S)) { // flashlight size
+        float scaleFactor = 1.15;
+        if (wheel > 0) {
+          scaleFactor = 1.0f / scaleFactor;
+        }
+        flashlight.inner *= scaleFactor;
+        flashlight.outer = flashlight.inner * 1.5;
+        SetShaderValue(shdrFlashlight, flashlight.innerLoc, &flashlight.inner,
+                       SHADER_UNIFORM_FLOAT);
+        SetShaderValue(shdrFlashlight, flashlight.outerLoc, &flashlight.outer,
+                       SHADER_UNIFORM_FLOAT);
+      } else { // zoom
+        // cursor relation
+        Vector2 mousePos = GetMousePosition();
+        Vector2 mouseWorldPos = GetScreenToWorld2D(mousePos, camera);
+        camera.offset = mousePos;
+        camera.target = mouseWorldPos;
 
-      // set
-      float scaleFactor = 1.0f + (0.25f * fabsf(wheel));
-      if (wheel < 0) {
-        scaleFactor = 1.0f / scaleFactor;
+        // set
+        float scaleFactor = 1.0f + (0.25f * fabsf(wheel));
+        if (wheel < 0) {
+          scaleFactor = 1.0f / scaleFactor;
+        }
+        camera.zoom = Clamp(camera.zoom * scaleFactor, 0.125f, 64.0f);
       }
-      camera.zoom = Clamp(camera.zoom * scaleFactor, 0.125f, 64.0f);
     }
 
     // change draw color
     if (IsKeyPressed(KEY_RIGHT)) {
       drawColorSelected++;
-      if (drawColorSelected >= sizeof(drawColors) / sizeof(*drawColors)) {
+      if (drawColorSelected >=
+          (int)(sizeof(drawColors) / sizeof(*drawColors))) {
         drawColorSelected = 0;
       }
     } else if (IsKeyPressed(KEY_LEFT)) {
@@ -138,6 +181,12 @@ int main(int argc, char *argv[]) {
       EndTextureMode();
     }
 
+    // flashlight
+    flashlight.pos = GetMousePosition();
+    flashlight.pos.y = srcHeight - flashlight.pos.y;
+    SetShaderValue(shdrFlashlight, flashlight.posLoc, &flashlight.pos,
+                   SHADER_UNIFORM_VEC2);
+
     // render
     BeginDrawing();
     {
@@ -156,6 +205,13 @@ int main(int argc, char *argv[]) {
                        (Vector2){0, 0}, WHITE);
       }
       EndMode2D();
+
+      // flashlight
+      if (prezFlags & FLAGS_FLASHLIGHT) {
+        BeginShaderMode(shdrFlashlight);
+        DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
+        EndShaderMode();
+      }
     }
     EndDrawing();
   }
