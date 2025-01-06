@@ -17,6 +17,6 @@ endif
 
 all:
 	gcc $(FILES)\
-		-march=native -O3\
+		-march=native -O3 -Wall -Wextra\
 		$(LIBRARIES)\
 		-o preztool
