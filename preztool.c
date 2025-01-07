@@ -4,6 +4,20 @@
 #include <rlgl.h>
 #include <stdlib.h>
 
+#define copy_light_shader_from_struct(shader, light)                           \
+  {                                                                            \
+    SetShaderValue(shader, light.posLoc, &light.pos, SHADER_UNIFORM_VEC3);     \
+    SetShaderValue(shader, light.colorLoc, &light.color, SHADER_UNIFORM_VEC3); \
+    SetShaderValue(shader, light.innerAlphaLoc, &light.innerAlpha,             \
+                   SHADER_UNIFORM_FLOAT);                                      \
+    SetShaderValue(shader, light.outerAlphaLoc, &light.outerAlpha,             \
+                   SHADER_UNIFORM_FLOAT);                                      \
+    SetShaderValue(shader, light.innerLoc, &light.inner,                       \
+                   SHADER_UNIFORM_FLOAT);                                      \
+    SetShaderValue(shader, light.outerLoc, &light.outer,                       \
+                   SHADER_UNIFORM_FLOAT);                                      \
+  }
+
 enum prez_flags {
   FLAGS_MIRROR_X = 1 << 0,
   FLAGS_MIRROR_Y = 1 << 1,
@@ -71,18 +85,7 @@ int main(int argc, char *argv[]) {
       .outerAlphaLoc =
           GetShaderLocation(shdrFlashlight, "flashlight.outerAlpha"),
   };
-  SetShaderValue(shdrFlashlight, flashlight.posLoc, &flashlight.pos,
-                 SHADER_UNIFORM_VEC3);
-  SetShaderValue(shdrFlashlight, flashlight.colorLoc, &flashlight.color,
-                 SHADER_UNIFORM_VEC3);
-  SetShaderValue(shdrFlashlight, flashlight.innerAlphaLoc,
-                 &flashlight.innerAlpha, SHADER_UNIFORM_FLOAT);
-  SetShaderValue(shdrFlashlight, flashlight.outerAlphaLoc,
-                 &flashlight.outerAlpha, SHADER_UNIFORM_FLOAT);
-  SetShaderValue(shdrFlashlight, flashlight.innerLoc, &flashlight.inner,
-                 SHADER_UNIFORM_FLOAT);
-  SetShaderValue(shdrFlashlight, flashlight.outerLoc, &flashlight.outer,
-                 SHADER_UNIFORM_FLOAT);
+  copy_light_shader_from_struct(shdrFlashlight, flashlight);
 
   // highlight
   Shader shdrHighlight =
@@ -103,18 +106,7 @@ int main(int argc, char *argv[]) {
       .outerAlphaLoc =
           GetShaderLocation(shdrHighlight, "flashlight.outerAlpha"),
   };
-  SetShaderValue(shdrHighlight, highlight.posLoc, &highlight.pos,
-                 SHADER_UNIFORM_VEC3);
-  SetShaderValue(shdrHighlight, highlight.colorLoc, &highlight.color,
-                 SHADER_UNIFORM_VEC3);
-  SetShaderValue(shdrHighlight, highlight.innerAlphaLoc, &highlight.innerAlpha,
-                 SHADER_UNIFORM_FLOAT);
-  SetShaderValue(shdrHighlight, highlight.outerAlphaLoc, &highlight.outerAlpha,
-                 SHADER_UNIFORM_FLOAT);
-  SetShaderValue(shdrHighlight, highlight.innerLoc, &highlight.inner,
-                 SHADER_UNIFORM_FLOAT);
-  SetShaderValue(shdrHighlight, highlight.outerLoc, &highlight.outer,
-                 SHADER_UNIFORM_FLOAT);
+  copy_light_shader_from_struct(shdrHighlight, highlight);
 
   // camera
   Camera2D camera = {};
