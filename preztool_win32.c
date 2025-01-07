@@ -8,15 +8,14 @@ void screenshot(unsigned char **data, int *width, int *height) {
   HDC hdc = GetDC(0);
 
   // Get screen dimensions
-  int nScreenWidth = GetSystemMetrics(SM_CXSCREEN);
-  int nScreenHeight = GetSystemMetrics(SM_CYSCREEN);
+  *width = GetSystemMetrics(SM_CXSCREEN);
+  *height = GetSystemMetrics(SM_CYSCREEN);
 
   // Create compatible DC, create a compatible bitmap and copy the screen using
   HDC hCaptureDC = CreateCompatibleDC(hdc);
-  HBITMAP hBitmap = CreateCompatibleBitmap(hdc, nScreenWidth, nScreenHeight);
+  HBITMAP hBitmap = CreateCompatibleBitmap(hdc, *width, *height);
   HGDIOBJ hOld = SelectObject(hCaptureDC, hBitmap);
-  BOOL bOK =
-      BitBlt(hCaptureDC, 0, 0, nScreenWidth, nScreenHeight, hdc, 0, 0, SRCCOPY);
+  BOOL bOK = BitBlt(hCaptureDC, 0, 0, *width, *height, hdc, 0, 0, SRCCOPY);
   // | CAPTUREBLT
 
   SelectObject(hCaptureDC, hOld);
