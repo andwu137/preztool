@@ -286,8 +286,6 @@ int main(int argc, char *argv[]) {
         DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
         EndShaderMode();
       }
-
-      DrawFPS(0, 0);
     }
     EndDrawing();
   }
