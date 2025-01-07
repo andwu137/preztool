@@ -76,6 +76,14 @@ int main(int argc, char *argv[]) {
   Vector2 mouseWorldPos;
 
   while (!WindowShouldClose()) {
+    // reset camera
+    if (IsKeyPressed(KEY_Z)) {
+      camera.zoom = 1.0;
+      camera.offset = (Vector2){0, 0};
+      camera.target = (Vector2){0, 0};
+      camera.rotation = 0;
+    }
+
     // swap flags
     if (IsKeyPressed(KEY_X)) {
       prezFlags ^= FLAGS_MIRROR_X;
