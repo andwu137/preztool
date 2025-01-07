@@ -12,7 +12,6 @@ void screenshot(unsigned char **data, int *dataWidth, int *dataHeight) {
     exit(1);
   }
 
-  int screen = XDefaultScreen(display);
   int window = XDefaultRootWindow(display);
   XWindowAttributes windowAttr;
   XGetWindowAttributes(display, window, &windowAttr);
