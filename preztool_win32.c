@@ -46,6 +46,14 @@ void screenshot(unsigned char **data, int *width, int *height) {
   }
 
   *data = lpPixels;
+  // reorganize data for rgba format
+  // PERF(andrew): simd?
+  unsigned char tempColor;
+  for (int i = 0; (i + 3) < 4 * (*width) * (*height); i += 4) {
+    tempColor = (*data)[i];
+    (*data)[i] = (*data)[i + 2];
+    (*data)[i + 2] = tempColor;
+  }
 
   // free
   DeleteObject(hBitmap);
