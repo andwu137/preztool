@@ -1,4 +1,15 @@
+#ifdef _WIN32
+#include "preztool_win32.h"
+#define PIXEL_FORMAT PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
+#define OS_VERTICAL_FLIP (-1)
+#endif // !_WIN32
+
+#ifdef linux
 #include "preztool_x11.h"
+#define PIXEL_FORMAT PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
+#define OS_VERTICAL_FLIP (1)
+#endif // !linux
+
 #include <raylib.h>
 #include <raymath.h>
 #include <rlgl.h>
@@ -59,7 +70,7 @@ int main(int argc, char *argv[]) {
   Image img = {.width = srcWidth,
                .height = srcHeight,
                .data = data,
-               .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
+               .format = PIXEL_FORMAT,
                .mipmaps = 1};
   Texture screenTexture = LoadTextureFromImage(img);
   UnloadImage(img);
@@ -260,7 +271,7 @@ int main(int argc, char *argv[]) {
       {
         DrawTextureRec(screenTexture,
                        (Rectangle){0, 0, srcWidth * flipVector.x,
-                                   srcHeight * flipVector.y},
+                                   OS_VERTICAL_FLIP * srcHeight * flipVector.y},
                        (Vector2){0, 0}, WHITE);
         DrawTextureRec(drawTarget.texture,
                        (Rectangle){0, 0,
