@@ -71,6 +71,8 @@ int main(int argc, char *argv[]) {
       .outerAlphaLoc =
           GetShaderLocation(shdrFlashlight, "flashlight.outerAlpha"),
   };
+  SetShaderValue(shdrFlashlight, flashlight.posLoc, &flashlight.pos,
+                 SHADER_UNIFORM_VEC3);
   SetShaderValue(shdrFlashlight, flashlight.colorLoc, &flashlight.color,
                  SHADER_UNIFORM_VEC3);
   SetShaderValue(shdrFlashlight, flashlight.innerAlphaLoc,
@@ -101,6 +103,8 @@ int main(int argc, char *argv[]) {
       .outerAlphaLoc =
           GetShaderLocation(shdrHighlight, "flashlight.outerAlpha"),
   };
+  SetShaderValue(shdrHighlight, highlight.posLoc, &highlight.pos,
+                 SHADER_UNIFORM_VEC3);
   SetShaderValue(shdrHighlight, highlight.colorLoc, &highlight.color,
                  SHADER_UNIFORM_VEC3);
   SetShaderValue(shdrHighlight, highlight.innerAlphaLoc, &highlight.innerAlpha,
