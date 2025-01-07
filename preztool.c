@@ -8,16 +8,23 @@ enum prez_flags {
   FLAGS_MIRROR_X = 1 << 0,
   FLAGS_MIRROR_Y = 1 << 1,
   FLAGS_FLASHLIGHT = 1 << 2,
+  FLAGS_HIGHLIGHT = 1 << 3,
 };
 
-struct flashlight {
+struct light {
   Vector2 pos;
+  Vector3 color;
   float inner;
+  float innerAlpha;
   float outer;
+  float outerAlpha;
 
   unsigned int posLoc;
+  unsigned int colorLoc;
   unsigned int innerLoc;
+  unsigned int innerAlphaLoc;
   unsigned int outerLoc;
+  unsigned int outerAlphaLoc;
 };
 
 int main(int argc, char *argv[]) {
@@ -48,17 +55,61 @@ int main(int argc, char *argv[]) {
   // flashlight
   Shader shdrFlashlight =
       LoadShader(NULL, "assets/shaders/flashlight.frag.glsl");
-  struct flashlight flashlight = {
+  struct light flashlight = {
       .pos = {0, 0},
       .posLoc = GetShaderLocation(shdrFlashlight, "flashlight.pos"),
+      .color = {0, 0, 0},
+      .colorLoc = GetShaderLocation(shdrFlashlight, "flashlight.color"),
       .inner = (float)srcWidth / 15,
       .innerLoc = GetShaderLocation(shdrFlashlight, "flashlight.inner"),
+      .innerAlpha = 0.0,
+      .innerAlphaLoc =
+          GetShaderLocation(shdrFlashlight, "flashlight.innerAlpha"),
       .outer = (float)srcWidth / 15 * 1.5,
       .outerLoc = GetShaderLocation(shdrFlashlight, "flashlight.outer"),
+      .outerAlpha = 1.0,
+      .outerAlphaLoc =
+          GetShaderLocation(shdrFlashlight, "flashlight.outerAlpha"),
   };
+  SetShaderValue(shdrFlashlight, flashlight.colorLoc, &flashlight.color,
+                 SHADER_UNIFORM_VEC3);
+  SetShaderValue(shdrFlashlight, flashlight.innerAlphaLoc,
+                 &flashlight.innerAlpha, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(shdrFlashlight, flashlight.outerAlphaLoc,
+                 &flashlight.outerAlpha, SHADER_UNIFORM_FLOAT);
   SetShaderValue(shdrFlashlight, flashlight.innerLoc, &flashlight.inner,
                  SHADER_UNIFORM_FLOAT);
   SetShaderValue(shdrFlashlight, flashlight.outerLoc, &flashlight.outer,
+                 SHADER_UNIFORM_FLOAT);
+
+  // highlight
+  Shader shdrHighlight =
+      LoadShader(NULL, "assets/shaders/flashlight.frag.glsl");
+  struct light highlight = {
+      .pos = {0, 0},
+      .posLoc = GetShaderLocation(shdrHighlight, "flashlight.pos"),
+      .color = {255, 255, 0},
+      .colorLoc = GetShaderLocation(shdrHighlight, "flashlight.color"),
+      .inner = (float)srcWidth / 100,
+      .innerLoc = GetShaderLocation(shdrHighlight, "flashlight.inner"),
+      .innerAlpha = 0.8,
+      .innerAlphaLoc =
+          GetShaderLocation(shdrHighlight, "flashlight.innerAlpha"),
+      .outer = (float)srcWidth / 100 * 1.5,
+      .outerLoc = GetShaderLocation(shdrHighlight, "flashlight.outer"),
+      .outerAlpha = 0.0,
+      .outerAlphaLoc =
+          GetShaderLocation(shdrHighlight, "flashlight.outerAlpha"),
+  };
+  SetShaderValue(shdrHighlight, highlight.colorLoc, &highlight.color,
+                 SHADER_UNIFORM_VEC3);
+  SetShaderValue(shdrHighlight, highlight.innerAlphaLoc, &highlight.innerAlpha,
+                 SHADER_UNIFORM_FLOAT);
+  SetShaderValue(shdrHighlight, highlight.outerAlphaLoc, &highlight.outerAlpha,
+                 SHADER_UNIFORM_FLOAT);
+  SetShaderValue(shdrHighlight, highlight.innerLoc, &highlight.inner,
+                 SHADER_UNIFORM_FLOAT);
+  SetShaderValue(shdrHighlight, highlight.outerLoc, &highlight.outer,
                  SHADER_UNIFORM_FLOAT);
 
   // camera
@@ -101,6 +152,9 @@ int main(int argc, char *argv[]) {
     }
     if (IsKeyPressed(KEY_F)) {
       prezFlags ^= FLAGS_FLASHLIGHT;
+    }
+    if (IsKeyPressed(KEY_H)) {
+      prezFlags ^= FLAGS_HIGHLIGHT;
     }
 
     // mouse init
@@ -195,6 +249,12 @@ int main(int argc, char *argv[]) {
     SetShaderValue(shdrFlashlight, flashlight.posLoc, &flashlight.pos,
                    SHADER_UNIFORM_VEC2);
 
+    // highlight
+    highlight.pos = GetMousePosition();
+    highlight.pos.y = srcHeight - highlight.pos.y;
+    SetShaderValue(shdrHighlight, highlight.posLoc, &highlight.pos,
+                   SHADER_UNIFORM_VEC2);
+
     // render
     BeginDrawing();
     {
@@ -220,6 +280,14 @@ int main(int argc, char *argv[]) {
         DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
         EndShaderMode();
       }
+      // highlight
+      if (prezFlags & FLAGS_HIGHLIGHT) {
+        BeginShaderMode(shdrHighlight);
+        DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
+        EndShaderMode();
+      }
+
+      DrawFPS(0, 0);
     }
     EndDrawing();
   }
