@@ -39,6 +39,21 @@ Made this tool so that I could draw and zoom on my screen, during live meetings.
     - [ ] Take a screenshot of desktop and reload the app background
 
 # Build:
+## Clone:
+### Dynamic
+```bash
+git clone https://gitlab.com/Uangn/preztool.git
+```
+### Static
+```bash
+git clone --recurse-submodules https://gitlab.com/Uangn/preztool.git
+```
+If you forgot to `--recurse-submodules` when cloning initially
+```bash
+cd preztool
+git submodule update --init --recursive
+```
+
 ## Prerequisites:
 - gcc
 - make
