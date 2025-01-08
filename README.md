@@ -38,13 +38,24 @@ Made this tool so that I could draw and zoom on my screen, during live meetings.
 - Recapture Screen
     - [ ] Take a screenshot of desktop and reload the app background
 
-# Build:
+# Dynamic Build:
 ## Clone:
-### Dynamic
 ```bash
 git clone https://gitlab.com/Uangn/preztool.git
 ```
-### Static
+## Prerequisites:
+- gcc
+- make
+- raylib development library
+### raylib
+- fedora: `dnf install raylib-devel`
+## Compile:
+```bash
+make
+```
+
+# Static Build:
+## Clone:
 ```bash
 git clone --recurse-submodules https://gitlab.com/Uangn/preztool.git
 ```
@@ -53,20 +64,10 @@ If you forgot to `--recurse-submodules` when cloning initially
 cd preztool
 git submodule update --init --recursive
 ```
-
 ## Prerequisites:
 - gcc
 - make
-- raylib development library (for dynamic linking only)
-### raylib
-- fedora: `dnf install raylib-devel`
-
-## Compile:
-### Dynamic
-```bash
-make
-```
-### Static Desktop
+## Compile
 ```bash
 make static
 ```
@@ -76,7 +77,6 @@ make static
 ```bash
 ./preztool
 ```
-
 ## If outside that directory:
 You could make a script that moves over to that directory
 ### Linux (sh)
