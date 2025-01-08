@@ -58,9 +58,7 @@ git submodule update --init --recursive
 - gcc
 - make
 - raylib development library (for dynamic linking only)
-
-## raylib
-### Linux:
+### raylib
 - fedora: `dnf install raylib-devel`
 
 ## Compile:
