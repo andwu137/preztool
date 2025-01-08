@@ -42,10 +42,20 @@ Made this tool so that I could draw and zoom on my screen, during live meetings.
 ## Prerequisites:
 - gcc
 - make
+- raylib development library (for dynamic linking only)
+
+## raylib
+### Linux:
+- fedora: `dnf install raylib-devel`
 
 ## Compile:
+# Dynamic
 ```bash
 make
+```
+# Static Desktop
+```bash
+make static
 ```
 
 # Run:
