@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
   copy_light_shader_from_struct(shdrHighlight, highlight);
 
   // camera
-  Camera2D camera = {};
+  Camera2D camera = {0};
   camera.zoom = 1.0f;
 
   // draw
