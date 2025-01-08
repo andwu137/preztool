@@ -49,11 +49,11 @@ Made this tool so that I could draw and zoom on my screen, during live meetings.
 - fedora: `dnf install raylib-devel`
 
 ## Compile:
-# Dynamic
+### Dynamic
 ```bash
 make
 ```
-# Static Desktop
+### Static Desktop
 ```bash
 make static
 ```
