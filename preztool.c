@@ -47,7 +47,6 @@
 
 #if defined(GRAPHICS_API_OPENGL_ES2)
 #endif // !GRAPHICS_API_OPENGL_ES2
-
 /* CLOSE OPENGL */
 
 #include <raylib.h>
@@ -101,21 +100,18 @@ int main(int argc, char *argv[]) {
       .height = srcHeight,
       .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, // WARN(andrew): wrong one
       .mipmaps = 1};
-  {
-    glBindTexture(GL_TEXTURE_2D, 0); // Free any old binding
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glGenTextures(1, &screenTexture.id); // Generate texture id
-    glBindTexture(GL_TEXTURE_2D, screenTexture.id);
-    unsigned int mipSize = 32;
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, screenTexture.width,
-                 screenTexture.height, 0, GL_BGRA, GL_UNSIGNED_BYTE, data);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glBindTexture(GL_TEXTURE_2D, 0);
-  }
+  glBindTexture(GL_TEXTURE_2D, 0); // Free any old binding
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+  glGenTextures(1, &screenTexture.id); // Generate texture id
+  glBindTexture(GL_TEXTURE_2D, screenTexture.id);
+  unsigned int mipSize = 32;
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, screenTexture.width,
+               screenTexture.height, 0, GL_BGRA, GL_UNSIGNED_BYTE, data);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glBindTexture(GL_TEXTURE_2D, 0);
   free(data);
 
   /* prez data */
