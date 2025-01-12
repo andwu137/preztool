@@ -38,8 +38,8 @@
 #endif // !GRAPHICS_API_OPENGL_11
 
 #if defined(GRAPHICS_API_OPENGL_33)
-#include "vendor/raylib/src/external/glad.h" // GLAD extensions loading library, includes OpenGL headers
-#endif                                       // !GRAPHICS_API_OPENGL_33
+#include "vendor/external/glad.h" // GLAD extensions loading library, includes OpenGL headers
+#endif                            // !GRAPHICS_API_OPENGL_33
 
 // NOTE(andrew): no support for OpenGL ES
 #if defined(GRAPHICS_API_OPENGL_ES3)
