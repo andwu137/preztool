@@ -39,37 +39,33 @@ Made this tool so that I could draw and zoom on my screen, during live meetings.
     - [ ] Take a screenshot of desktop and reload the app background
 
 # Dynamic Build:
-## Clone:
-```bash
-git clone https://gitlab.com/Uangn/preztool.git
-```
 ## Prerequisites:
 - gcc
 - make
 - raylib development library
 ### raylib
 - fedora: `dnf install raylib-devel`
-## Compile:
+## Commands:
 ```bash
+git clone https://gitlab.com/Uangn/preztool.git
+cd preztool
 make
 ```
 
 # Static Build:
-## Clone:
+## Prerequisites:
+- gcc
+- make
+## Commands:
 ```bash
 git clone --recurse-submodules https://gitlab.com/Uangn/preztool.git
+cd preztool
+make static
 ```
 If you forgot to `--recurse-submodules` when cloning initially
 ```bash
 cd preztool
 git submodule update --init --recursive
-```
-## Prerequisites:
-- gcc
-- make
-## Compile
-```bash
-make static
 ```
 
 # Run:
