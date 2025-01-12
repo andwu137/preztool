@@ -1,14 +1,54 @@
 #ifdef _WIN32
 #include "preztool_win32.h"
-#define PIXEL_FORMAT PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
 #define OS_VERTICAL_FLIP (-1)
 #endif // !_WIN32
 
 #ifdef linux
 #include "preztool_x11.h"
-#define PIXEL_FORMAT PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
 #define OS_VERTICAL_FLIP (1)
 #endif // !linux
+
+/* OPENGL */
+#if !defined(GRAPHICS_API_OPENGL_11) && !defined(GRAPHICS_API_OPENGL_21) &&    \
+    !defined(GRAPHICS_API_OPENGL_33) && !defined(GRAPHICS_API_OPENGL_43) &&    \
+    !defined(GRAPHICS_API_OPENGL_ES2) && !defined(GRAPHICS_API_OPENGL_ES3)
+#define GRAPHICS_API_OPENGL_33
+#endif
+
+#if defined(GRAPHICS_API_OPENGL_11)
+#if defined(__APPLE__)
+#include <OpenGL/gl.h>    // OpenGL 1.1 library for OSX
+#include <OpenGL/glext.h> // OpenGL extensions library
+#else
+// APIENTRY for OpenGL function pointer declarations is required
+#if !defined(APIENTRY)
+#if defined(_WIN32)
+#define APIENTRY __stdcall
+#else
+#define APIENTRY
+#endif
+#endif
+// WINGDIAPI definition. Some Windows OpenGL headers need it
+#if !defined(WINGDIAPI) && defined(_WIN32)
+#define WINGDIAPI __declspec(dllimport)
+#endif
+
+#include <GL/gl.h> // OpenGL 1.1 library
+#endif
+#endif // !GRAPHICS_API_OPENGL_11
+
+#if defined(GRAPHICS_API_OPENGL_33)
+#include "vendor/raylib/src/external/glad.h" // GLAD extensions loading library, includes OpenGL headers
+#endif                                       // !GRAPHICS_API_OPENGL_33
+
+// NOTE(andrew): no support for OpenGL ES
+#if defined(GRAPHICS_API_OPENGL_ES3)
+#endif // !GRAPHICS_API_OPENGL_ES3
+
+#if defined(GRAPHICS_API_OPENGL_ES2)
+#endif // !GRAPHICS_API_OPENGL_ES2
+
+/* CLOSE OPENGL */
 
 #include <raylib.h>
 #include <raymath.h>
@@ -55,13 +95,28 @@ int main(int argc, char *argv[]) {
   SetTargetFPS(60);
 
   // load screenshot as texture
-  Image img = {.width = srcWidth,
-               .height = srcHeight,
-               .data = data,
-               .format = PIXEL_FORMAT,
-               .mipmaps = 1};
-  Texture screenTexture = LoadTextureFromImage(img);
-  UnloadImage(img);
+  // Texture screenTexture = LoadTextureFromImage(img);
+  Texture screenTexture = {
+      .width = srcWidth,
+      .height = srcHeight,
+      .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, // WARN(andrew): wrong one
+      .mipmaps = 1};
+  {
+    glBindTexture(GL_TEXTURE_2D, 0); // Free any old binding
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glGenTextures(1, &screenTexture.id); // Generate texture id
+    glBindTexture(GL_TEXTURE_2D, screenTexture.id);
+    unsigned int mipSize = 32;
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, screenTexture.width,
+                 screenTexture.height, 0, GL_BGRA, GL_UNSIGNED_BYTE, data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+  }
+  free(data);
 
   /* prez data */
   unsigned char prezFlags = 0;

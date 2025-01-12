@@ -23,13 +23,9 @@ void screenshot(unsigned char **data, int *dataWidth, int *dataHeight) {
   }
   XCloseDisplay(display);
 
-  // reorganize data for rgba format
+  // set all alpha to full
   // PERF(andrew): simd?
-  unsigned char tempColor;
   for (int i = 0; (i + 3) < 4 * img->width * img->height; i += 4) {
-    // tempColor = img->data[i];
-    // img->data[i] = img->data[i + 2];
-    // img->data[i + 2] = tempColor;
     img->data[i + 3] = ~(0L);
   }
 
