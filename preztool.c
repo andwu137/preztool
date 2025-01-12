@@ -15,20 +15,6 @@
 #include <rlgl.h>
 #include <stdlib.h>
 
-#define copy_light_shader_from_struct(shader, light)                           \
-  {                                                                            \
-    SetShaderValue(shader, light.posLoc, &light.pos, SHADER_UNIFORM_VEC3);     \
-    SetShaderValue(shader, light.colorLoc, &light.color, SHADER_UNIFORM_VEC3); \
-    SetShaderValue(shader, light.innerAlphaLoc, &light.innerAlpha,             \
-                   SHADER_UNIFORM_FLOAT);                                      \
-    SetShaderValue(shader, light.outerAlphaLoc, &light.outerAlpha,             \
-                   SHADER_UNIFORM_FLOAT);                                      \
-    SetShaderValue(shader, light.innerLoc, &light.inner,                       \
-                   SHADER_UNIFORM_FLOAT);                                      \
-    SetShaderValue(shader, light.outerLoc, &light.outer,                       \
-                   SHADER_UNIFORM_FLOAT);                                      \
-  }
-
 enum prez_flags {
   FLAGS_MIRROR_X = 1 << 0,
   FLAGS_MIRROR_Y = 1 << 1,
@@ -51,6 +37,8 @@ struct light {
   unsigned int outerLoc;
   unsigned int outerAlphaLoc;
 };
+
+void copy_light_shader_from_struct(Shader shader, struct light *light);
 
 int main(int argc, char *argv[]) {
   // screenshot
@@ -96,7 +84,7 @@ int main(int argc, char *argv[]) {
       .outerAlphaLoc =
           GetShaderLocation(shdrFlashlight, "flashlight.outerAlpha"),
   };
-  copy_light_shader_from_struct(shdrFlashlight, flashlight);
+  copy_light_shader_from_struct(shdrFlashlight, &flashlight);
 
   // highlight
   Shader shdrHighlight =
@@ -117,7 +105,7 @@ int main(int argc, char *argv[]) {
       .outerAlphaLoc =
           GetShaderLocation(shdrHighlight, "flashlight.outerAlpha"),
   };
-  copy_light_shader_from_struct(shdrHighlight, highlight);
+  copy_light_shader_from_struct(shdrHighlight, &highlight);
 
   // camera
   Camera2D camera = {0};
@@ -301,4 +289,15 @@ int main(int argc, char *argv[]) {
 
   CloseWindow();
   return EXIT_SUCCESS;
+}
+
+void copy_light_shader_from_struct(Shader shader, struct light *light) {
+  SetShaderValue(shader, light->posLoc, &light->pos, SHADER_UNIFORM_VEC3);
+  SetShaderValue(shader, light->colorLoc, &light->color, SHADER_UNIFORM_VEC3);
+  SetShaderValue(shader, light->innerAlphaLoc, &light->innerAlpha,
+                 SHADER_UNIFORM_FLOAT);
+  SetShaderValue(shader, light->outerAlphaLoc, &light->outerAlpha,
+                 SHADER_UNIFORM_FLOAT);
+  SetShaderValue(shader, light->innerLoc, &light->inner, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(shader, light->outerLoc, &light->outer, SHADER_UNIFORM_FLOAT);
 }
