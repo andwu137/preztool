@@ -1,6 +1,7 @@
 RAYLIB ?= ./vendor/raylib/src/
 FILES = preztool.c
 LIBRARIES = -lraylib
+FLAGS = -march=native -O3 -Wall -Wextra\
 
 ifeq ($(OS),Windows_NT)
 	LIBRARIES += -lgdi32 -lwinmm
@@ -22,12 +23,12 @@ endif
 
 all:
 ifneq ($(PLATFORM),)
-	cd vendor/raylib/src &&\
+	cd vendor/raylib/src && \
 		make PLATFORM=$(PLATFORM) RAYLIB_BUILD_MODE=$(BUILD_MODE)
 endif
-	gcc $(FILES)\
-		-march=native -O3 -Wall -Wextra\
-		$(LIBRARIES)\
+	gcc $(FILES) \
+		$(LIBRARIES) \
+		$(FLAGS) \
 		-o preztool
 
 static:
