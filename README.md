@@ -2,7 +2,9 @@
 Made this tool so that I could draw and zoom on my screen, during live meetings. Inspired by zoomit (Microsoft Sysinternals).
 
 # Supported Platforms:
-- [X] linux (tested on fedora)
+- linux
+    - [X] X11 (tested on fedora)
+    - [ ] wayland
 - [ ] windows 10 and 11 (very unstable, I don't have a windows machine)
 
 # Features:
