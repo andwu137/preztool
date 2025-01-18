@@ -163,8 +163,23 @@ int main(int argc, char *argv[]) {
   Vector2 mouseWorldPos;
 
   while (!WindowShouldClose()) {
+    // retake screenshot
+    if (IsKeyPressed(KEY_T)) {
+      UnloadTexture(screenTexture);
+      SetWindowState(FLAG_WINDOW_HIDDEN);
+      {
+        WaitTime((double)3 / 30); // WARN(andrew): this could fail to wait for
+                                  // the display to fully finish updating
+        // PERF(andrew): should use shm, but the docs suck
+        screenshot(&data, &srcWidth, &srcHeight);
+        screenshot_as_texture(data, srcWidth, srcHeight, &screenTexture);
+      }
+      ClearWindowState(FLAG_WINDOW_HIDDEN);
+      SetWindowPosition(0, 0);
+    }
+
     // reset camera
-    if (IsKeyPressed(KEY_Z)) {
+    if (IsKeyPressed(KEY_T) || IsKeyPressed(KEY_Z)) {
       camera.zoom = 1.0;
       camera.offset = (Vector2){0, 0};
       camera.target = (Vector2){0, 0};
