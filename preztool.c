@@ -1,11 +1,15 @@
 #ifdef _WIN32
 #include "preztool_win32.h"
 #define OS_VERTICAL_FLIP (-1)
+#define PIXEL_FORMAT GL_BGRA
+#define RL_PIXEL_FORMAT PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
 #endif // !_WIN32
 
 #ifdef linux
 #include "preztool_x11.h"
 #define OS_VERTICAL_FLIP (1)
+#define PIXEL_FORMAT GL_BGRA
+#define RL_PIXEL_FORMAT PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
 #endif // !linux
 
 /* OPENGL */
@@ -79,6 +83,26 @@ struct light {
 
 void copy_light_shader_from_struct(Shader shader, struct light *light);
 
+void screenshot_as_texture(unsigned char *data, int srcWidth, int srcHeight,
+                           Texture *screenTexture) {
+  screenTexture->width = srcWidth;
+  screenTexture->height = srcHeight;
+  screenTexture->format = RL_PIXEL_FORMAT; // WARN(andrew): wrong one
+  screenTexture->mipmaps = 1;
+  glBindTexture(GL_TEXTURE_2D, 0); // Free any old binding
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+  glGenTextures(1, &screenTexture->id); // Generate texture id
+  glBindTexture(GL_TEXTURE_2D, screenTexture->id);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, screenTexture->width,
+               screenTexture->height, 0, PIXEL_FORMAT, GL_UNSIGNED_BYTE, data);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glBindTexture(GL_TEXTURE_2D, 0);
+  free(data);
+}
+
 int main(int argc, char *argv[]) {
   // screenshot
   unsigned char *data;
@@ -93,26 +117,8 @@ int main(int argc, char *argv[]) {
   SetWindowPosition(0, 0);
   SetTargetFPS(60);
 
-  // load screenshot as texture
-  // Texture screenTexture = LoadTextureFromImage(img);
-  Texture screenTexture = {
-      .width = srcWidth,
-      .height = srcHeight,
-      .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, // WARN(andrew): wrong one
-      .mipmaps = 1};
-  glBindTexture(GL_TEXTURE_2D, 0); // Free any old binding
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-  glGenTextures(1, &screenTexture.id); // Generate texture id
-  glBindTexture(GL_TEXTURE_2D, screenTexture.id);
-  unsigned int mipSize = 32;
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, screenTexture.width,
-               screenTexture.height, 0, GL_BGRA, GL_UNSIGNED_BYTE, data);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glBindTexture(GL_TEXTURE_2D, 0);
-  free(data);
+  Texture screenTexture = {0};
+  screenshot_as_texture(data, srcWidth, srcHeight, &screenTexture);
 
   /* prez data */
   unsigned char prezFlags = 0;
