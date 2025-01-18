@@ -58,11 +58,14 @@
 #include <rlgl.h>
 #include <stdlib.h>
 
+#define DEFAULT_DRAW_SIZE 5
+
 enum prez_flags {
   FLAGS_MIRROR_X = 1 << 0,
   FLAGS_MIRROR_Y = 1 << 1,
   FLAGS_FLASHLIGHT = 1 << 2,
   FLAGS_HIGHLIGHT = 1 << 3,
+  FLAGS_BRUSH_PREVIEW = 1 << 4,
 };
 
 struct light {
@@ -81,27 +84,9 @@ struct light {
   unsigned int outerAlphaLoc;
 };
 
-void copy_light_shader_from_struct(Shader shader, struct light *light);
-
+void setup_light_shader(Shader shader, struct light *l);
 void screenshot_as_texture(unsigned char *data, int srcWidth, int srcHeight,
-                           Texture *screenTexture) {
-  screenTexture->width = srcWidth;
-  screenTexture->height = srcHeight;
-  screenTexture->format = RL_PIXEL_FORMAT; // WARN(andrew): wrong one
-  screenTexture->mipmaps = 1;
-  glBindTexture(GL_TEXTURE_2D, 0); // Free any old binding
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-  glGenTextures(1, &screenTexture->id); // Generate texture id
-  glBindTexture(GL_TEXTURE_2D, screenTexture->id);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, screenTexture->width,
-               screenTexture->height, 0, PIXEL_FORMAT, GL_UNSIGNED_BYTE, data);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glBindTexture(GL_TEXTURE_2D, 0);
-  free(data);
-}
+                           Texture *screenTexture);
 
 int main(int argc, char *argv[]) {
   // screenshot
@@ -122,48 +107,6 @@ int main(int argc, char *argv[]) {
 
   /* prez data */
   unsigned char prezFlags = 0;
-  // flashlight
-  Shader shdrFlashlight =
-      LoadShader(NULL, "assets/shaders/flashlight.frag.glsl");
-  struct light flashlight = {
-      .pos = {0, 0},
-      .posLoc = GetShaderLocation(shdrFlashlight, "flashlight.pos"),
-      .color = {0, 0, 0},
-      .colorLoc = GetShaderLocation(shdrFlashlight, "flashlight.color"),
-      .inner = (float)srcWidth / 15,
-      .innerLoc = GetShaderLocation(shdrFlashlight, "flashlight.inner"),
-      .innerAlpha = 0.0,
-      .innerAlphaLoc =
-          GetShaderLocation(shdrFlashlight, "flashlight.innerAlpha"),
-      .outer = (float)srcWidth / 15 * 1.5,
-      .outerLoc = GetShaderLocation(shdrFlashlight, "flashlight.outer"),
-      .outerAlpha = 1.0,
-      .outerAlphaLoc =
-          GetShaderLocation(shdrFlashlight, "flashlight.outerAlpha"),
-  };
-  copy_light_shader_from_struct(shdrFlashlight, &flashlight);
-
-  // highlight
-  Shader shdrHighlight =
-      LoadShader(NULL, "assets/shaders/flashlight.frag.glsl");
-  struct light highlight = {
-      .pos = {0, 0},
-      .posLoc = GetShaderLocation(shdrHighlight, "flashlight.pos"),
-      .color = {255, 255, 0},
-      .colorLoc = GetShaderLocation(shdrHighlight, "flashlight.color"),
-      .inner = (float)srcWidth / 100,
-      .innerLoc = GetShaderLocation(shdrHighlight, "flashlight.inner"),
-      .innerAlpha = 0.8,
-      .innerAlphaLoc =
-          GetShaderLocation(shdrHighlight, "flashlight.innerAlpha"),
-      .outer = (float)srcWidth / 100 * 1.5,
-      .outerLoc = GetShaderLocation(shdrHighlight, "flashlight.outer"),
-      .outerAlpha = 0.0,
-      .outerAlphaLoc =
-          GetShaderLocation(shdrHighlight, "flashlight.outerAlpha"),
-  };
-  copy_light_shader_from_struct(shdrHighlight, &highlight);
-
   // camera
   Camera2D camera = {0};
   camera.zoom = 1.0f;
@@ -172,6 +115,47 @@ int main(int argc, char *argv[]) {
   RenderTexture2D drawTarget = LoadRenderTexture(srcWidth, srcHeight);
   Color drawColors[] = {RED, GREEN, BLUE, WHITE, BLACK};
   int drawColorSelected = 0;
+
+  // flashlight
+  Shader shdrFlashlight =
+      LoadShader(NULL, "assets/shaders/flashlight.frag.glsl");
+  struct light flashlight = {
+      .pos = {0, 0},
+      .color = {0, 0, 0},
+      .inner = (float)srcWidth / 15,
+      .innerAlpha = 0.0,
+      .outer = (float)srcWidth / 15 * 1.5,
+      .outerAlpha = 1.0,
+  };
+  setup_light_shader(shdrFlashlight, &flashlight);
+
+  // highlight
+  Shader shdrHighlight =
+      LoadShader(NULL, "assets/shaders/flashlight.frag.glsl");
+  struct light highlight = {
+      .pos = {0, 0},
+      .color = {255, 255, 0},
+      .inner = (float)srcWidth / 100,
+      .innerAlpha = 0.8,
+      .outer = (float)srcWidth / 100 * 1.5,
+      .outerAlpha = 0.0,
+  };
+  setup_light_shader(shdrHighlight, &highlight);
+
+  // brush preview
+  Shader shdrBrushPreview =
+      LoadShader(NULL, "assets/shaders/flashlight.frag.glsl");
+  struct light brushPreview = {
+      .pos = {0, 0},
+      .color = {(float)drawColors[drawColorSelected].r / 255,
+                (float)drawColors[drawColorSelected].g / 255,
+                (float)drawColors[drawColorSelected].b / 255},
+      .inner = DEFAULT_DRAW_SIZE,
+      .innerAlpha = 1.0,
+      .outer = DEFAULT_DRAW_SIZE,
+      .outerAlpha = 0.0,
+  };
+  setup_light_shader(shdrBrushPreview, &brushPreview);
 
   // mouse
   Vector2 mousePos;
@@ -207,6 +191,9 @@ int main(int argc, char *argv[]) {
     }
     if (IsKeyPressed(KEY_H)) {
       prezFlags ^= FLAGS_HIGHLIGHT;
+    }
+    if (IsKeyPressed(KEY_P)) {
+      prezFlags ^= FLAGS_BRUSH_PREVIEW;
     }
 
     // mouse init
@@ -266,16 +253,30 @@ int main(int argc, char *argv[]) {
     }
 
     // change draw color
-    if (IsKeyPressed(KEY_RIGHT)) {
-      drawColorSelected++;
-      if (drawColorSelected >=
-          (int)(sizeof(drawColors) / sizeof(*drawColors))) {
-        drawColorSelected = 0;
+    {
+      bool drawDirty = false;
+      if (IsKeyPressed(KEY_RIGHT)) {
+        drawColorSelected++;
+        if (drawColorSelected >=
+            (int)(sizeof(drawColors) / sizeof(*drawColors))) {
+          drawColorSelected = 0;
+        }
+        drawDirty = true;
+      } else if (IsKeyPressed(KEY_LEFT)) {
+        drawColorSelected--;
+        if (drawColorSelected < 0) {
+          drawColorSelected = sizeof(drawColors) / sizeof(*drawColors) - 1;
+        }
+        drawDirty = true;
       }
-    } else if (IsKeyPressed(KEY_LEFT)) {
-      drawColorSelected--;
-      if (drawColorSelected < 0) {
-        drawColorSelected = sizeof(drawColors) / sizeof(*drawColors) - 1;
+
+      // send to shader
+      if (drawDirty) {
+        brushPreview.color.x = (float)drawColors[drawColorSelected].r / 255;
+        brushPreview.color.y = (float)drawColors[drawColorSelected].g / 255;
+        brushPreview.color.z = (float)drawColors[drawColorSelected].b / 255;
+        SetShaderValue(shdrBrushPreview, brushPreview.colorLoc,
+                       &brushPreview.color, SHADER_UNIFORM_VEC3);
       }
     }
 
@@ -289,8 +290,9 @@ int main(int argc, char *argv[]) {
     // draw
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
       BeginTextureMode(drawTarget);
-      DrawCircleV(mouseWorldPos, 5, drawColors[drawColorSelected]);
-      DrawLineEx(prevMouseWorldPos, mouseWorldPos, 10,
+      DrawCircleV(mouseWorldPos, DEFAULT_DRAW_SIZE,
+                  drawColors[drawColorSelected]);
+      DrawLineEx(prevMouseWorldPos, mouseWorldPos, DEFAULT_DRAW_SIZE * 2,
                  drawColors[drawColorSelected]);
       EndTextureMode();
     }
@@ -305,6 +307,12 @@ int main(int argc, char *argv[]) {
     highlight.pos = GetMousePosition();
     highlight.pos.y = srcHeight - highlight.pos.y;
     SetShaderValue(shdrHighlight, highlight.posLoc, &highlight.pos,
+                   SHADER_UNIFORM_VEC2);
+
+    // brush preview
+    brushPreview.pos = GetMousePosition();
+    brushPreview.pos.y = srcHeight - brushPreview.pos.y;
+    SetShaderValue(shdrBrushPreview, brushPreview.posLoc, &brushPreview.pos,
                    SHADER_UNIFORM_VEC2);
 
     // render
@@ -338,6 +346,12 @@ int main(int argc, char *argv[]) {
         DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
         EndShaderMode();
       }
+      // brush preview
+      if (prezFlags & FLAGS_BRUSH_PREVIEW) {
+        BeginShaderMode(shdrBrushPreview);
+        DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
+        EndShaderMode();
+      }
     }
     EndDrawing();
   }
@@ -348,13 +362,40 @@ int main(int argc, char *argv[]) {
   return EXIT_SUCCESS;
 }
 
-void copy_light_shader_from_struct(Shader shader, struct light *light) {
-  SetShaderValue(shader, light->posLoc, &light->pos, SHADER_UNIFORM_VEC3);
-  SetShaderValue(shader, light->colorLoc, &light->color, SHADER_UNIFORM_VEC3);
-  SetShaderValue(shader, light->innerAlphaLoc, &light->innerAlpha,
+void setup_light_shader(Shader shader, struct light *l) {
+  l->posLoc = GetShaderLocation(shader, "flashlight.pos");
+  l->colorLoc = GetShaderLocation(shader, "flashlight.color");
+  l->innerLoc = GetShaderLocation(shader, "flashlight.inner");
+  l->innerAlphaLoc = GetShaderLocation(shader, "flashlight.innerAlpha");
+  l->outerLoc = GetShaderLocation(shader, "flashlight.outer");
+  l->outerAlphaLoc = GetShaderLocation(shader, "flashlight.outerAlpha");
+
+  SetShaderValue(shader, l->posLoc, &l->pos, SHADER_UNIFORM_VEC2);
+  SetShaderValue(shader, l->colorLoc, &l->color, SHADER_UNIFORM_VEC3);
+  SetShaderValue(shader, l->innerAlphaLoc, &l->innerAlpha,
                  SHADER_UNIFORM_FLOAT);
-  SetShaderValue(shader, light->outerAlphaLoc, &light->outerAlpha,
+  SetShaderValue(shader, l->outerAlphaLoc, &l->outerAlpha,
                  SHADER_UNIFORM_FLOAT);
-  SetShaderValue(shader, light->innerLoc, &light->inner, SHADER_UNIFORM_FLOAT);
-  SetShaderValue(shader, light->outerLoc, &light->outer, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(shader, l->innerLoc, &l->inner, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(shader, l->outerLoc, &l->outer, SHADER_UNIFORM_FLOAT);
+}
+
+void screenshot_as_texture(unsigned char *data, int srcWidth, int srcHeight,
+                           Texture *screenTexture) {
+  screenTexture->width = srcWidth;
+  screenTexture->height = srcHeight;
+  screenTexture->format = RL_PIXEL_FORMAT; // WARN(andrew): wrong one
+  screenTexture->mipmaps = 1;
+  glBindTexture(GL_TEXTURE_2D, 0); // Free any old binding
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+  glGenTextures(1, &screenTexture->id); // Generate texture id
+  glBindTexture(GL_TEXTURE_2D, screenTexture->id);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, screenTexture->width,
+               screenTexture->height, 0, PIXEL_FORMAT, GL_UNSIGNED_BYTE, data);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glBindTexture(GL_TEXTURE_2D, 0);
+  free(data);
 }
