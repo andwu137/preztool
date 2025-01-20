@@ -56,3 +56,6 @@ vgcore.*
 
 # Build
 preztool
+
+# clangd
+.cache
