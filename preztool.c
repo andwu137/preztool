@@ -90,9 +90,9 @@ void screenshot_as_texture(unsigned char *data, int srcWidth, int srcHeight,
 
 int main(int argc, char *argv[]) {
   // screenshot
-  unsigned char *data;
-  int srcWidth;
-  int srcHeight;
+  unsigned char *data = NULL;
+  int srcWidth = 0;
+  int srcHeight = 0;
   screenshot(&data, &srcWidth, &srcHeight);
 
   // start window
@@ -115,6 +115,7 @@ int main(int argc, char *argv[]) {
   RenderTexture2D drawTarget = LoadRenderTexture(srcWidth, srcHeight);
   Color drawColors[] = {RED, GREEN, BLUE, WHITE, BLACK};
   int drawColorSelected = 0;
+  float brushDrawSize = DEFAULT_DRAW_SIZE;
 
   // flashlight
   Shader shdrFlashlight =
@@ -158,9 +159,9 @@ int main(int argc, char *argv[]) {
   setup_light_shader(shdrBrushPreview, &brushPreview);
 
   // mouse
-  Vector2 mousePos;
-  Vector2 prevMouseWorldPos;
-  Vector2 mouseWorldPos;
+  Vector2 mousePos = {0, 0};
+  Vector2 prevMouseWorldPos = {0, 0};
+  Vector2 mouseWorldPos = {0, 0};
 
   while (!WindowShouldClose()) {
     // retake screenshot
@@ -201,14 +202,16 @@ int main(int argc, char *argv[]) {
       mousePos.y = srcHeight - mousePos.y;
       mouseWorldPos.y = srcHeight - mouseWorldPos.y;
     }
-    if (IsKeyPressed(KEY_F)) {
-      prezFlags ^= FLAGS_FLASHLIGHT;
-    }
-    if (IsKeyPressed(KEY_H)) {
-      prezFlags ^= FLAGS_HIGHLIGHT;
-    }
-    if (IsKeyPressed(KEY_P)) {
-      prezFlags ^= FLAGS_BRUSH_PREVIEW;
+    if (!IsKeyDown(KEY_LEFT_SHIFT)) {
+      if (IsKeyPressed(KEY_F)) {
+        prezFlags ^= FLAGS_FLASHLIGHT;
+      }
+      if (IsKeyPressed(KEY_H)) {
+        prezFlags ^= FLAGS_HIGHLIGHT;
+      }
+      if (IsKeyPressed(KEY_P)) {
+        prezFlags ^= FLAGS_BRUSH_PREVIEW;
+      }
     }
 
     // mouse init
@@ -240,17 +243,32 @@ int main(int argc, char *argv[]) {
     }
 
     if (wheel != 0) {
-      if (IsKeyDown(KEY_S)) { // flashlight size
-        float scaleFactor = 1.15;
-        if (wheel > 0) {
-          scaleFactor = 1.0f / scaleFactor;
+      if (IsKeyDown(KEY_LEFT_SHIFT)) {
+        if (IsKeyDown(KEY_B)) {
+          float scaleFactor = 1.15;
+          if (wheel > 0) {
+            scaleFactor = 1.0f / scaleFactor;
+          }
+          brushDrawSize *= fabsf(wheel) * scaleFactor;
+          brushPreview.inner = brushDrawSize * camera.zoom;
+          brushPreview.outer = brushDrawSize * camera.zoom;
+          SetShaderValue(shdrBrushPreview, brushPreview.innerLoc,
+                         &brushPreview.inner, SHADER_UNIFORM_FLOAT);
+          SetShaderValue(shdrBrushPreview, brushPreview.outerLoc,
+                         &brushPreview.outer, SHADER_UNIFORM_FLOAT);
         }
-        flashlight.inner *= scaleFactor;
-        flashlight.outer = flashlight.inner * 1.5;
-        SetShaderValue(shdrFlashlight, flashlight.innerLoc, &flashlight.inner,
-                       SHADER_UNIFORM_FLOAT);
-        SetShaderValue(shdrFlashlight, flashlight.outerLoc, &flashlight.outer,
-                       SHADER_UNIFORM_FLOAT);
+        if (IsKeyDown(KEY_F)) { // flashlight size
+          float scaleFactor = 1.15;
+          if (wheel > 0) {
+            scaleFactor = 1.0f / scaleFactor;
+          }
+          flashlight.inner *= fabsf(wheel) * scaleFactor;
+          flashlight.outer = flashlight.inner * 1.5;
+          SetShaderValue(shdrFlashlight, flashlight.innerLoc, &flashlight.inner,
+                         SHADER_UNIFORM_FLOAT);
+          SetShaderValue(shdrFlashlight, flashlight.outerLoc, &flashlight.outer,
+                         SHADER_UNIFORM_FLOAT);
+        }
       } else { // zoom
         // cursor relation
         Vector2 mousePos = GetMousePosition();
@@ -264,6 +282,12 @@ int main(int argc, char *argv[]) {
           scaleFactor = 1.0f / scaleFactor;
         }
         camera.zoom = Clamp(camera.zoom * scaleFactor, 0.125f, 64.0f);
+        brushPreview.inner = brushDrawSize * camera.zoom;
+        brushPreview.outer = brushDrawSize * camera.zoom;
+        SetShaderValue(shdrBrushPreview, brushPreview.innerLoc,
+                       &brushPreview.inner, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(shdrBrushPreview, brushPreview.outerLoc,
+                       &brushPreview.outer, SHADER_UNIFORM_FLOAT);
       }
     }
 
@@ -305,9 +329,9 @@ int main(int argc, char *argv[]) {
     // draw
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
       BeginTextureMode(drawTarget);
-      DrawCircleV(mouseWorldPos, DEFAULT_DRAW_SIZE,
+      DrawCircleV(mouseWorldPos, brushDrawSize,
                   drawColors[drawColorSelected]);
-      DrawLineEx(prevMouseWorldPos, mouseWorldPos, DEFAULT_DRAW_SIZE * 2,
+      DrawLineEx(prevMouseWorldPos, mouseWorldPos, brushDrawSize * 2,
                  drawColors[drawColorSelected]);
       EndTextureMode();
     }
