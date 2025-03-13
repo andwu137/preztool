@@ -57,6 +57,8 @@
 #include <raymath.h>
 #include <rlgl.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 #define DEFAULT_DRAW_SIZE 5
 
@@ -66,6 +68,7 @@ enum prez_flags {
   FLAGS_FLASHLIGHT = 1 << 2,
   FLAGS_HIGHLIGHT = 1 << 3,
   FLAGS_BRUSH_PREVIEW = 1 << 4,
+  FLAGS_BRUSH_SELECT = 1 << 5,
 };
 
 struct light {
@@ -84,9 +87,14 @@ struct light {
   unsigned int outerAlphaLoc;
 };
 
-void setup_light_shader(Shader shader, struct light *l);
-void screenshot_as_texture(unsigned char *data, int srcWidth, int srcHeight,
-                           Texture *screenTexture);
+// prototypes
+inline void set_brush_preview_size(
+    float brushDrawSize, float zoom, struct light *brushPreview, Shader *shdrBrushPreview);
+inline void set_brush_preview_color(
+    Color c, struct light *brushPreview, Shader *shdrBrushPreview);
+inline void setup_light_shader(Shader shader, struct light *l);
+inline void screenshot_as_texture(
+    unsigned char *data, int srcWidth, int srcHeight, Texture *screenTexture);
 
 int main(int argc, char *argv[]) {
   // screenshot
@@ -113,9 +121,11 @@ int main(int argc, char *argv[]) {
 
   // draw
   RenderTexture2D drawTarget = LoadRenderTexture(srcWidth, srcHeight);
+  Color defaultDrawColors[] = {RED, GREEN, BLUE, WHITE, BLACK};
   Color drawColors[] = {RED, GREEN, BLUE, WHITE, BLACK};
   int drawColorSelected = 0;
   float brushDrawSize = DEFAULT_DRAW_SIZE;
+  Vector2 brushSelectPosition = {0, 0};
 
   // flashlight
   Shader shdrFlashlight =
@@ -202,7 +212,13 @@ int main(int argc, char *argv[]) {
       mousePos.y = srcHeight - mousePos.y;
       mouseWorldPos.y = srcHeight - mouseWorldPos.y;
     }
-    if (!IsKeyDown(KEY_LEFT_SHIFT)) {
+    if (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) {
+    } else if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
+      if (IsKeyPressed(KEY_B)) { // reset brush color
+        drawColors[drawColorSelected] = defaultDrawColors[drawColorSelected];
+        set_brush_preview_color(drawColors[drawColorSelected], &brushPreview, &shdrBrushPreview);
+      }
+    } else {
       if (IsKeyPressed(KEY_F)) {
         prezFlags ^= FLAGS_FLASHLIGHT;
       }
@@ -212,7 +228,11 @@ int main(int argc, char *argv[]) {
       if (IsKeyPressed(KEY_P)) {
         prezFlags ^= FLAGS_BRUSH_PREVIEW;
       }
+      if (IsKeyPressed(KEY_B)) {
+        prezFlags ^= FLAGS_BRUSH_SELECT;
+      }
     }
+
 
     // mouse init
     Vector2 flipVector = Vector2One();
@@ -236,32 +256,72 @@ int main(int argc, char *argv[]) {
     }
     Vector2Multiply(delta, flipVector);
 
-    // translate
     if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
-      delta = Vector2Scale(delta, -1.0f / camera.zoom);
-      camera.target = Vector2Add(camera.target, delta);
+      if (prezFlags & FLAGS_BRUSH_SELECT) { // select color
+        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) { // new start position
+          brushSelectPosition.x = mousePos.x;
+          brushSelectPosition.y = mousePos.y;
+        }
+
+        Color *c = &drawColors[drawColorSelected];
+        {
+          Vector2 d = Vector2Subtract(mousePos, brushSelectPosition);
+
+          float angle = atan2(d.y, d.x);
+          float hue = fmod((angle * 180.0 / M_PI), 360.0);
+          if (hue < 0.0) hue += 360.0;
+
+          float saturation = fmin(Vector2Length(d), 1.0);
+          float lightness = 0.5;
+          float chroma = (1.0 - fabs(2.0 * lightness - 1.0)) * saturation;
+          float x = chroma * (1.0 - fabs(fmod(hue / 60.0, 2.0) - 1.0));
+          float m = lightness - chroma / 2.0;
+
+          float r=0.0, g=0.0, b=0.0;
+          if (hue >= 0.0 && hue < 60.0) { r = chroma; g = x; }
+          else if (hue >= 60.0 && hue < 120.0) { r = x; g = chroma; }
+          else if (hue >= 120.0 && hue < 180.0) { g = chroma; b = x; }
+          else if (hue >= 180.0 && hue < 240.0) { g = x; b = chroma; }
+          else if (hue >= 240.0 && hue < 300.0) { r = x; b = chroma; }
+          else { r = chroma; b = x; }
+
+          c->r = ((r + m) * 255.0) + 0.5;
+          c->g = ((g + m) * 255.0) + 0.5;
+          c->b = ((b + m) * 255.0) + 0.5;
+        }
+
+        set_brush_preview_color(*c, &brushPreview, &shdrBrushPreview);
+      }
+
+      else { // translate
+        delta = Vector2Scale(delta, -1.0f / camera.zoom);
+        camera.target = Vector2Add(camera.target, delta);
+      }
     }
 
+
     if (wheel != 0) {
-      if (IsKeyDown(KEY_LEFT_SHIFT)) {
-        if (IsKeyDown(KEY_B)) {
-          float scaleFactor = 1.15;
-          if (wheel > 0) {
-            scaleFactor = 1.0f / scaleFactor;
-          }
-          brushDrawSize *= fabsf(wheel) * scaleFactor;
-          brushPreview.inner = brushDrawSize * camera.zoom;
-          brushPreview.outer = brushDrawSize * camera.zoom;
-          SetShaderValue(shdrBrushPreview, brushPreview.innerLoc,
-                         &brushPreview.inner, SHADER_UNIFORM_FLOAT);
-          SetShaderValue(shdrBrushPreview, brushPreview.outerLoc,
-                         &brushPreview.outer, SHADER_UNIFORM_FLOAT);
+      if (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) {
+        float scaleFactor = 1.15;
+        if (wheel > 0) {
+          scaleFactor = 1.0f / scaleFactor;
         }
+
+        if (IsKeyDown(KEY_B)) { // brush scaling
+          brushDrawSize *= fabsf(wheel) * scaleFactor;
+          set_brush_preview_size(brushDrawSize, camera.zoom, &brushPreview, &shdrBrushPreview);
+        }
+
+        if (IsKeyDown(KEY_H)) { // highlight size
+          highlight.inner *= fabsf(wheel) * scaleFactor;
+          highlight.outer = highlight.inner * 1.5;
+          SetShaderValue(shdrHighlight, highlight.innerLoc, &highlight.inner,
+                         SHADER_UNIFORM_FLOAT);
+          SetShaderValue(shdrHighlight, highlight.outerLoc, &highlight.outer,
+                         SHADER_UNIFORM_FLOAT);
+        }
+
         if (IsKeyDown(KEY_F)) { // flashlight size
-          float scaleFactor = 1.15;
-          if (wheel > 0) {
-            scaleFactor = 1.0f / scaleFactor;
-          }
           flashlight.inner *= fabsf(wheel) * scaleFactor;
           flashlight.outer = flashlight.inner * 1.5;
           SetShaderValue(shdrFlashlight, flashlight.innerLoc, &flashlight.inner,
@@ -269,7 +329,9 @@ int main(int argc, char *argv[]) {
           SetShaderValue(shdrFlashlight, flashlight.outerLoc, &flashlight.outer,
                          SHADER_UNIFORM_FLOAT);
         }
-      } else { // zoom
+      }
+
+      else { // zoom
         // cursor relation
         Vector2 mousePos = GetMousePosition();
         Vector2 mouseWorldPos = GetScreenToWorld2D(mousePos, camera);
@@ -282,12 +344,8 @@ int main(int argc, char *argv[]) {
           scaleFactor = 1.0f / scaleFactor;
         }
         camera.zoom = Clamp(camera.zoom * scaleFactor, 0.125f, 64.0f);
-        brushPreview.inner = brushDrawSize * camera.zoom;
-        brushPreview.outer = brushDrawSize * camera.zoom;
-        SetShaderValue(shdrBrushPreview, brushPreview.innerLoc,
-                       &brushPreview.inner, SHADER_UNIFORM_FLOAT);
-        SetShaderValue(shdrBrushPreview, brushPreview.outerLoc,
-                       &brushPreview.outer, SHADER_UNIFORM_FLOAT);
+        // brush needs a zoom update
+        set_brush_preview_size(brushDrawSize, camera.zoom, &brushPreview, &shdrBrushPreview);
       }
     }
 
@@ -311,11 +369,7 @@ int main(int argc, char *argv[]) {
 
       // send to shader
       if (drawDirty) {
-        brushPreview.color.x = (float)drawColors[drawColorSelected].r / 255;
-        brushPreview.color.y = (float)drawColors[drawColorSelected].g / 255;
-        brushPreview.color.z = (float)drawColors[drawColorSelected].b / 255;
-        SetShaderValue(shdrBrushPreview, brushPreview.colorLoc,
-                       &brushPreview.color, SHADER_UNIFORM_VEC3);
+        set_brush_preview_color(drawColors[drawColorSelected], &brushPreview, &shdrBrushPreview);
       }
     }
 
@@ -329,8 +383,7 @@ int main(int argc, char *argv[]) {
     // draw
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
       BeginTextureMode(drawTarget);
-      DrawCircleV(mouseWorldPos, brushDrawSize,
-                  drawColors[drawColorSelected]);
+      DrawCircleV(mouseWorldPos, brushDrawSize, drawColors[drawColorSelected]);
       DrawLineEx(prevMouseWorldPos, mouseWorldPos, brushDrawSize * 2,
                  drawColors[drawColorSelected]);
       EndTextureMode();
@@ -401,6 +454,25 @@ int main(int argc, char *argv[]) {
   return EXIT_SUCCESS;
 }
 
+void set_brush_preview_size(
+    float brushDrawSize, float zoom, struct light *brushPreview, Shader *shdrBrushPreview) {
+  brushPreview->inner = brushDrawSize * zoom;
+  brushPreview->outer = brushDrawSize * zoom;
+  SetShaderValue(*shdrBrushPreview, brushPreview->innerLoc,
+                 &brushPreview->inner, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(*shdrBrushPreview, brushPreview->outerLoc,
+                 &brushPreview->outer, SHADER_UNIFORM_FLOAT);
+}
+
+void set_brush_preview_color(
+    Color c, struct light *brushPreview, Shader *shdrBrushPreview) {
+  brushPreview->color.x = (float)c.r / 255;
+  brushPreview->color.y = (float)c.g / 255;
+  brushPreview->color.z = (float)c.b / 255;
+  SetShaderValue(*shdrBrushPreview, brushPreview->colorLoc,
+                 &brushPreview->color, SHADER_UNIFORM_VEC3);
+}
+
 void setup_light_shader(Shader shader, struct light *l) {
   l->posLoc = GetShaderLocation(shader, "flashlight.pos");
   l->colorLoc = GetShaderLocation(shader, "flashlight.color");
@@ -419,8 +491,8 @@ void setup_light_shader(Shader shader, struct light *l) {
   SetShaderValue(shader, l->outerLoc, &l->outer, SHADER_UNIFORM_FLOAT);
 }
 
-void screenshot_as_texture(unsigned char *data, int srcWidth, int srcHeight,
-                           Texture *screenTexture) {
+void screenshot_as_texture(
+    unsigned char *data, int srcWidth, int srcHeight, Texture *screenTexture) {
   screenTexture->width = srcWidth;
   screenTexture->height = srcHeight;
   screenTexture->format = RL_PIXEL_FORMAT; // WARN(andrew): wrong one
