@@ -66,6 +66,7 @@ enum prez_flags {
   FLAGS_FLASHLIGHT = 1 << 2,
   FLAGS_HIGHLIGHT = 1 << 3,
   FLAGS_BRUSH_PREVIEW = 1 << 4,
+  FLAGS_ERASE = 1 << 5,
 };
 
 struct light {
@@ -194,6 +195,9 @@ int main(int argc, char *argv[]) {
       // for prev
       mousePos.x = srcWidth - mousePos.x;
       mouseWorldPos.x = srcWidth - mouseWorldPos.x;
+    }
+    if (IsKeyPressed(KEY_E)) {
+      prezFlags ^= FLAGS_ERASE;
     }
     if (IsKeyPressed(KEY_V)) {
       prezFlags ^= FLAGS_MIRROR_Y;
@@ -328,11 +332,26 @@ int main(int argc, char *argv[]) {
 
     // draw
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+      Color color = drawColors[drawColorSelected];
+
       BeginTextureMode(drawTarget);
-      DrawCircleV(mouseWorldPos, brushDrawSize,
-                  drawColors[drawColorSelected]);
-      DrawLineEx(prevMouseWorldPos, mouseWorldPos, brushDrawSize * 2,
-                 drawColors[drawColorSelected]);
+      {
+        if (prezFlags & FLAGS_ERASE) { // erase
+          rlSetBlendFactorsSeparate(
+              RL_ZERO, RL_ONE_MINUS_SRC_ALPHA,
+              RL_ZERO, RL_ONE_MINUS_SRC_ALPHA,
+              RL_FUNC_ADD, RL_FUNC_ADD);
+          BeginBlendMode(BLEND_CUSTOM_SEPARATE);
+          // color = WHITE;
+        }
+
+        DrawCircleV(mouseWorldPos, brushDrawSize, color);
+        DrawLineEx(prevMouseWorldPos, mouseWorldPos, brushDrawSize * 2, color);
+
+        if (prezFlags & FLAGS_ERASE) { // erase
+          EndBlendMode();
+        }
+      }
       EndTextureMode();
     }
 
