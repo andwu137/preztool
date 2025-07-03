@@ -341,8 +341,17 @@ int main(int argc, char *argv[]) {
     // clear draw
     if (IsKeyPressed(KEY_C)) {
       BeginTextureMode(drawTarget);
-      ClearBackground(BLANK);
+      {
+        ClearBackground(BLANK);
+      }
       EndTextureMode();
+
+      BeginTextureMode(permDrawTarget);
+      {
+        ClearBackground(BLANK);
+      }
+      EndTextureMode();
+      drawHistoryStart = drawHistoryEnd;
     }
 
     // redo/undo draw
