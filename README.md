@@ -19,7 +19,7 @@ Made this tool so that I could draw and zoom on my screen, during live meetings.
     - [X] Change brush color: `arrow-left` | `arrow-right`
     - [ ] Undo drawing: `u`
     - [ ] Toggle eraser: `e`
-    - [ ] Display brush preview
+    - [X] Display brush preview
 - Mirror Image
     - [X] Mirror Horizontal: `x`
     - [X] Mirror Vertical: `v`
