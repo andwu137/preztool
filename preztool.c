@@ -59,6 +59,7 @@
 #include <stdlib.h>
 
 #define DEFAULT_DRAW_SIZE 5
+#define DRAW_HISTORY_SIZE 4096
 
 enum prez_flags {
   FLAGS_MIRROR_X = 1 << 0,
@@ -67,6 +68,14 @@ enum prez_flags {
   FLAGS_HIGHLIGHT = 1 << 3,
   FLAGS_BRUSH_PREVIEW = 1 << 4,
   FLAGS_ERASE = 1 << 5,
+};
+
+struct draw_state {
+  uint16_t prezFlags;
+  float brushDrawSize;
+  Color color;
+  Vector2 start,
+          end;
 };
 
 struct light {
@@ -107,12 +116,16 @@ int main(int argc, char *argv[]) {
   screenshot_as_texture(data, srcWidth, srcHeight, &screenTexture);
 
   /* prez data */
-  unsigned char prezFlags = 0;
+  uint16_t prezFlags = 0;
   // camera
   Camera2D camera = {0};
   camera.zoom = 1.0f;
 
   // draw
+  struct draw_state draw_history_buf[DRAW_HISTORY_SIZE] = {0};
+  size_t draw_history_buf_size = 0;
+  size_t draw_history_pos = 0;
+  size_t draw_history_undo_count = 0;
   RenderTexture2D drawTarget = LoadRenderTexture(srcWidth, srcHeight);
   Color drawColors[] = {RED, GREEN, BLUE, WHITE, BLACK};
   int drawColorSelected = 0;
@@ -330,10 +343,73 @@ int main(int argc, char *argv[]) {
       EndTextureMode();
     }
 
+    // redo/undo draw
+    if (IsKeyPressed(KEY_U) || IsKeyPressedRepeat(KEY_U)) {
+      if (IsKeyDown(KEY_LEFT_SHIFT)) { // redo
+        if (draw_history_undo_count > 0) {
+          draw_history_undo_count--;
+          draw_history_pos++;
+          draw_history_buf_size++;
+        }
+      } else { // undo
+        if (draw_history_buf_size != 0) {
+          draw_history_undo_count++;
+          draw_history_buf_size--;
+          if (draw_history_pos == 0) {
+            draw_history_pos = DRAW_HISTORY_SIZE - 1;
+          } else {
+            draw_history_pos = draw_history_pos - 1;
+          }
+        }
+      }
+
+      // redraw
+      size_t start_i;
+      if (draw_history_pos >= draw_history_buf_size) {
+        start_i = draw_history_pos - draw_history_buf_size;
+      } else {
+        start_i = draw_history_pos - draw_history_buf_size + DRAW_HISTORY_SIZE;
+      }
+
+      BeginTextureMode(drawTarget);
+      {
+        ClearBackground(BLANK);
+
+        for (size_t i = 0; i < draw_history_buf_size; i++) {
+          struct draw_state *node = draw_history_buf + ((i + start_i) % DRAW_HISTORY_SIZE);
+          Color color = node->color;
+          if (node->prezFlags & FLAGS_ERASE) { // erase
+            rlSetBlendFactorsSeparate(
+                RL_ZERO, RL_ONE_MINUS_SRC_ALPHA,
+                RL_ZERO, RL_ONE_MINUS_SRC_ALPHA,
+                RL_FUNC_ADD, RL_FUNC_ADD);
+            BeginBlendMode(BLEND_CUSTOM_SEPARATE);
+          }
+
+          DrawCircleV(node->end, node->brushDrawSize, color);
+          DrawLineEx(node->start, node->end,
+                     node->brushDrawSize * 2, color);
+
+          if (node->prezFlags & FLAGS_ERASE) { // erase
+            EndBlendMode();
+          }
+        }
+      }
+      EndTextureMode();
+    }
+
     // draw
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-      Color color = drawColors[drawColorSelected];
+      draw_history_buf[draw_history_pos].color = drawColors[drawColorSelected];
+      draw_history_buf[draw_history_pos].prezFlags = prezFlags;
+      draw_history_buf[draw_history_pos].brushDrawSize = brushDrawSize;
+      draw_history_buf[draw_history_pos].start = prevMouseWorldPos;
+      draw_history_buf[draw_history_pos].end = mouseWorldPos;
 
+      draw_history_pos = (draw_history_pos + 1) % DRAW_HISTORY_SIZE;
+      if (draw_history_buf_size != DRAW_HISTORY_SIZE) { draw_history_buf_size++; }
+
+      Color color = drawColors[drawColorSelected];
       BeginTextureMode(drawTarget);
       {
         if (prezFlags & FLAGS_ERASE) { // erase
@@ -342,7 +418,6 @@ int main(int argc, char *argv[]) {
               RL_ZERO, RL_ONE_MINUS_SRC_ALPHA,
               RL_FUNC_ADD, RL_FUNC_ADD);
           BeginBlendMode(BLEND_CUSTOM_SEPARATE);
-          // color = WHITE;
         }
 
         DrawCircleV(mouseWorldPos, brushDrawSize, color);
