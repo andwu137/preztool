@@ -386,7 +386,9 @@ int main(int argc, char *argv[]) {
     }
 
     // draw
-    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)
+        && (mouseWorldPos.x != prevMouseWorldPos.y
+          || mouseWorldPos.y != prevMouseWorldPos.y)) {
       drawHistoryBuf[drawHistoryEnd].color = drawColors[drawColorSelected];
       drawHistoryBuf[drawHistoryEnd].prezFlags = prezFlags;
       drawHistoryBuf[drawHistoryEnd].brushDrawSize = brushDrawSize;
@@ -395,20 +397,24 @@ int main(int argc, char *argv[]) {
 
       drawHistoryEnd = (drawHistoryEnd + 1) % DRAW_HISTORY_SIZE;
       if (drawHistoryStart == (drawHistoryEnd + 1) % DRAW_HISTORY_SIZE) { // buffer is full
-        struct draw_state *node = &drawHistoryBuf[drawHistoryStart];
         BeginTextureMode(permDrawTarget);
         {
-          if (node->prezFlags & FLAGS_ERASE) { begin_erase_blend_mode(); }
+          size_t skip_size = DRAW_HISTORY_SIZE / 3;
+          for (size_t i = 0; i < skip_size; i++) { // force save portion of the buffer
+            struct draw_state *node = &drawHistoryBuf[drawHistoryStart];
 
-          DrawCircleV(node->end, node->brushDrawSize, node->color);
-          DrawLineEx(node->start, node->end,
-                     node->brushDrawSize * 2, node->color);
+            if (node->prezFlags & FLAGS_ERASE) { begin_erase_blend_mode(); }
 
-          if (node->prezFlags & FLAGS_ERASE) { EndBlendMode(); }
+            DrawCircleV(node->end, node->brushDrawSize, node->color);
+            DrawLineEx(node->start, node->end,
+                       node->brushDrawSize * 2, node->color);
+
+            if (node->prezFlags & FLAGS_ERASE) { EndBlendMode(); }
+
+            drawHistoryStart = (drawHistoryStart + 1) % DRAW_HISTORY_SIZE;
+          }
         }
         EndTextureMode();
-
-        drawHistoryStart = (drawHistoryStart + 1) % DRAW_HISTORY_SIZE;
       }
 
       Color color = drawColors[drawColorSelected];
