@@ -38,7 +38,7 @@ Made this tool so that I could draw and zoom on my screen, during live meetings.
         - [ ] Cropped
     - [ ] Crop the screen
 - Recapture Screen
-    - [ ] Take a screenshot of desktop and reload the app background
+    - [X] Take a screenshot of desktop and reload the app background
 
 # Dynamic Build:
 ## Prerequisites:
