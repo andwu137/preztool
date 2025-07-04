@@ -263,7 +263,7 @@ int main(int argc, char *argv[]) {
 
     if (wheel != 0) {
       if (IsKeyDown(KEY_LEFT_SHIFT)) {
-        if (IsKeyDown(KEY_B)) {
+        if (IsKeyDown(KEY_B)) { // brush size
           float scaleFactor = 1.15;
           if (wheel > 0) {
             scaleFactor = 1.0f / scaleFactor;
@@ -286,6 +286,18 @@ int main(int argc, char *argv[]) {
           SetShaderValue(shdrFlashlight, flashlight.innerLoc, &flashlight.inner,
                          SHADER_UNIFORM_FLOAT);
           SetShaderValue(shdrFlashlight, flashlight.outerLoc, &flashlight.outer,
+                         SHADER_UNIFORM_FLOAT);
+        }
+        if (IsKeyDown(KEY_H)) { // highlight size
+          float scaleFactor = 1.15;
+          if (wheel > 0) {
+            scaleFactor = 1.0f / scaleFactor;
+          }
+          highlight.inner *= fabsf(wheel) * scaleFactor;
+          highlight.outer = highlight.inner * 1.5;
+          SetShaderValue(shdrHighlight, highlight.innerLoc, &highlight.inner,
+                         SHADER_UNIFORM_FLOAT);
+          SetShaderValue(shdrHighlight, highlight.outerLoc, &highlight.outer,
                          SHADER_UNIFORM_FLOAT);
         }
       } else { // zoom
