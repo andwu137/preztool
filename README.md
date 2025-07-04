@@ -15,19 +15,20 @@ Made this tool so that I could draw and zoom on my screen, during live meetings.
     - [X] Drag moving the image: `mouse-2`
 - Drawing on the screen
     - [X] Drawing: `mouse-1`
-    - [X] Reset drawing: `c`
+    - [X] Clear drawing: `c`
     - [X] Change brush color: `arrow-left` | `arrow-right`
     - [X] Undo drawing: `u`
     - [X] Toggle eraser: `e`
-    - [X] Display brush preview
+    - [X] Display brush preview: `p`
 - Mirror Image
     - [X] Mirror Horizontal: `x`
     - [X] Mirror Vertical: `v`
 - Highlight
     - [X] Toggle `h`
+    - [X] Change Size: `h` + `mouse-scroll`
 - Flashlight
     - [X] Toggle: `f`
-    - [X] Change Size: `s` + `mouse-scroll`
+    - [X] Change Size: `f` + `mouse-scroll`
 - Rotation
     - [ ] Rotate Clockwise: `r`
     - [ ] Rotate Counter-Clockwise: `shift` + `r`
@@ -38,7 +39,7 @@ Made this tool so that I could draw and zoom on my screen, during live meetings.
         - [ ] Cropped
     - [ ] Crop the screen
 - Recapture Screen
-    - [X] Take a screenshot of desktop and reload the app background
+    - [X] Take a screenshot of desktop and reload the app background: `t`
 
 # Dynamic Build:
 ## Prerequisites:
