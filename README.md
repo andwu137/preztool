@@ -5,7 +5,7 @@ Made this tool so that I could draw and zoom on my screen, during live meetings.
 - linux
     - [X] X11 (tested on fedora)
     - [ ] wayland
-- [ ] windows 10 and 11 (very unstable, I don't have a windows machine)
+- [ ] Windows 10 and 11 (framework for it is there, I just have not defined a few required functions; I don't have access to a windows machine)
 
 # Features:
 - Zooming
@@ -40,6 +40,9 @@ Made this tool so that I could draw and zoom on my screen, during live meetings.
     - [ ] Crop the screen
 - Recapture Screen
     - [X] Take a screenshot of desktop and reload the app background: `t`
+- Print Screen To:
+    - [ ] File
+    - [ ] Clipboard
 
 # Dynamic Build:
 ## Prerequisites:
@@ -64,9 +67,8 @@ make
 git clone --recurse-submodules https://gitlab.com/Uangn/preztool.git
 cd preztool
 make static
-```
-If you forgot to `--recurse-submodules` when cloning initially
-```bash
+
+# If you forgot to `--recurse-submodules` when cloning initially
 cd preztool
 git submodule update --init --recursive
 ```

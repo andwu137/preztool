@@ -1,10 +1,16 @@
-#include "preztool_win32.h"
+#ifndef PREZTOOL_WIN32_C
+#define PREZTOOL_WIN32_C
+
 #include "preztool.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
 
-void screenshot(unsigned char **data, int *width, int *height) {
+void screenshot(
+    unsigned char **data,
+    int *width,
+    int *height) {
   HDC hdc = GetDC(0);
 
   // Get screen dimensions
@@ -51,3 +57,15 @@ void screenshot(unsigned char **data, int *width, int *height) {
   DeleteObject(hBitmap);
   ReleaseDC(NULL, hdc);
 }
+
+void *make_circular_vmem_buffer(
+    size_t size,
+    unsigned int above,
+    unsigned int below) {
+  // TODO(andrew): setup circular buffer
+  __builtin_trap();
+  exit(-1);
+  return NULL;
+}
+
+#endif // PREZTOOL_WIN32_C

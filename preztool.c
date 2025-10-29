@@ -1,12 +1,10 @@
 #ifdef _WIN32
-#include "preztool_win32.h"
 #define OS_VERTICAL_FLIP (-1)
 #define PIXEL_FORMAT GL_BGRA
 #define RL_PIXEL_FORMAT PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
 #endif // !_WIN32
 
 #ifdef linux
-#include "preztool_x11.h"
 #define OS_VERTICAL_FLIP (1)
 #define PIXEL_FORMAT GL_BGRA
 #define RL_PIXEL_FORMAT PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
@@ -56,10 +54,14 @@
 #include <raylib.h>
 #include <raymath.h>
 #include <rlgl.h>
+
 #include <stdlib.h>
+#include <string.h>
+
+#include "preztool.h"
 
 #define DEFAULT_DRAW_SIZE 5
-#define DRAW_HISTORY_SIZE 4096
+#define DRAW_HISTORY_MAX (1ul << 24)
 
 enum prez_flags {
   FLAGS_MIRROR_X = 1 << 0,
@@ -70,13 +72,29 @@ enum prez_flags {
   FLAGS_ERASE = 1 << 5,
 };
 
-struct draw_state { // PERF(andrew): duplication of start and end, when in arrays
-  uint16_t prezFlags;
+struct draw_info {
+  uint32_t prezFlags;
   float brushDrawSize;
   Color color;
-  Vector2 start,
-          end;
 };
+
+struct draw_stroke {
+  struct draw_stroke *previous;
+  struct draw_info info;
+  size_t length;
+};
+
+#define GET_BUFFER_DRAW_STROKE(ds) \
+  ((Vector2 *)(((uint8_t *)ds) + sizeof(struct draw_stroke)))
+
+#define GET_LAST_BUFFER_DRAW_STROKE(ds) \
+  ((Vector2 *)(((uint8_t *)(ds)) + NEXT_DRAW_STROKE_OFFSET(ds) - sizeof(Vector2)))
+
+#define NEXT_DRAW_STROKE_OFFSET(ds) \
+  (sizeof(struct draw_stroke) + ((ds)->length * sizeof(Vector2)))
+
+#define NEXT_DRAW_STROKE(ds) \
+  ((struct draw_stroke *)(((uint8_t *)(ds)) + NEXT_DRAW_STROKE_OFFSET(ds)))
 
 struct light {
   Vector2 pos;
@@ -94,12 +112,133 @@ struct light {
   unsigned int outerAlphaLoc;
 };
 
-void setup_light_shader(Shader shader, struct light *l);
-void screenshot_as_texture(unsigned char *data, int srcWidth, int srcHeight,
-                           Texture *screenTexture);
-void begin_erase_blend_mode();
+static inline void setup_light_shader(
+    Shader shader,
+    struct light *l) {
+  l->posLoc = GetShaderLocation(shader, "flashlight.pos");
+  l->colorLoc = GetShaderLocation(shader, "flashlight.color");
+  l->innerLoc = GetShaderLocation(shader, "flashlight.inner");
+  l->innerAlphaLoc = GetShaderLocation(shader, "flashlight.innerAlpha");
+  l->outerLoc = GetShaderLocation(shader, "flashlight.outer");
+  l->outerAlphaLoc = GetShaderLocation(shader, "flashlight.outerAlpha");
 
-int main(int argc, char *argv[]) {
+  SetShaderValue(shader, l->posLoc, &l->pos, SHADER_UNIFORM_VEC2);
+  SetShaderValue(shader, l->colorLoc, &l->color, SHADER_UNIFORM_VEC3);
+  SetShaderValue(shader, l->innerAlphaLoc, &l->innerAlpha,
+                 SHADER_UNIFORM_FLOAT);
+  SetShaderValue(shader, l->outerAlphaLoc, &l->outerAlpha,
+                 SHADER_UNIFORM_FLOAT);
+  SetShaderValue(shader, l->innerLoc, &l->inner, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(shader, l->outerLoc, &l->outer, SHADER_UNIFORM_FLOAT);
+}
+
+static inline void screenshot_as_texture(
+    unsigned char *data,
+    int srcWidth,
+    int srcHeight,
+    Texture *screenTexture) {
+  screenTexture->width = srcWidth;
+  screenTexture->height = srcHeight;
+  screenTexture->format = RL_PIXEL_FORMAT; // WARN(andrew): wrong one
+  screenTexture->mipmaps = 1;
+  glBindTexture(GL_TEXTURE_2D, 0); // Free any old binding
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+  glGenTextures(1, &screenTexture->id); // Generate texture id
+  glBindTexture(GL_TEXTURE_2D, screenTexture->id);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, screenTexture->width,
+               screenTexture->height, 0, PIXEL_FORMAT, GL_UNSIGNED_BYTE, data);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glBindTexture(GL_TEXTURE_2D, 0);
+  free(data);
+}
+
+static inline void begin_erase_blend_mode(
+    void) {
+  rlSetBlendFactorsSeparate(
+      RL_ZERO, RL_ONE_MINUS_SRC_ALPHA,
+      RL_ZERO, RL_ONE_MINUS_SRC_ALPHA,
+      RL_FUNC_ADD, RL_FUNC_ADD);
+  BeginBlendMode(BLEND_CUSTOM_SEPARATE);
+}
+
+static inline void render_stroke_segment(
+    RenderTexture2D target,
+    struct draw_info info,
+    Vector2 start,
+    Vector2 end) {
+  BeginTextureMode(target); {
+    if (info.prezFlags & FLAGS_ERASE) { begin_erase_blend_mode(); }
+
+    DrawCircleV(end, info.brushDrawSize, info.color);
+    DrawLineEx(start, end, info.brushDrawSize * 2, info.color);
+
+    if (info.prezFlags & FLAGS_ERASE) { EndBlendMode(); }
+  } EndTextureMode();
+}
+
+static inline void render_stroke(
+    RenderTexture2D target,
+    struct draw_stroke *s)
+{
+  Vector2 *start_p = GET_BUFFER_DRAW_STROKE(s);
+  for (size_t i = 1;
+      i < s->length;
+      i++) {
+    render_stroke_segment(target, s->info, start_p[i - 1], start_p[i]);
+  }
+}
+
+static inline void render_oldest_stroke(
+    RenderTexture2D target,
+    uint8_t *drawHistory,
+    size_t *drawHistoryStart,
+    size_t *drawStrokeCount)
+{
+  // render the old stroke to permanent memory
+  struct draw_stroke *old_s = (struct draw_stroke *)(drawHistory + *drawHistoryStart);
+  render_stroke(target, old_s);
+
+  // free the old stroke, remove references to it
+  *drawHistoryStart = (*drawHistoryStart + NEXT_DRAW_STROKE_OFFSET(old_s)) % DRAW_HISTORY_MAX;
+  ((struct draw_stroke *)(drawHistory + *drawHistoryStart))->previous = NULL;
+  (*drawStrokeCount)--;
+}
+
+void *alloc_draw_history(
+    uint8_t *drawHistory,
+    size_t *drawHistoryStart,
+    size_t *drawHistoryEnd,
+    size_t *drawStrokeCount,
+    RenderTexture2D permDrawTarget,
+    size_t alloc) {
+  if (alloc > DRAW_HISTORY_MAX) { abort(); }
+
+  // get size
+  size_t drawHistorySize;
+  if (*drawHistoryStart <= *drawHistoryEnd) {
+    drawHistorySize = *drawHistoryEnd - *drawHistoryStart;
+  } else {
+    drawHistorySize = (DRAW_HISTORY_MAX - *drawHistoryStart) + *drawHistoryEnd;
+  }
+
+  // if size is out, render the oldest stroke, and free it
+  if (drawHistorySize + alloc >= DRAW_HISTORY_MAX) {
+    render_oldest_stroke(permDrawTarget, drawHistory, drawHistoryStart, drawStrokeCount);
+  }
+
+  // push
+  Vector2 *temp = (Vector2 *)(drawHistory + *drawHistoryEnd);
+  *drawHistoryEnd = ((*drawHistoryEnd) + alloc) % DRAW_HISTORY_MAX;
+  return temp;
+}
+
+int main(
+    void) {
+  int retval = EXIT_FAILURE;
+
   // screenshot
   unsigned char *data = NULL;
   int srcWidth = 0;
@@ -117,18 +256,24 @@ int main(int argc, char *argv[]) {
   screenshot_as_texture(data, srcWidth, srcHeight, &screenTexture);
 
   /* prez data */
-  uint16_t prezFlags = 0;
+  uint32_t prezFlags = 0;
   // camera
   Camera2D camera = {0};
   camera.zoom = 1.0f;
 
   // draw
-  struct draw_state drawHistoryBuf[DRAW_HISTORY_SIZE] = {0};
+  uint8_t *drawHistory = make_circular_vmem_buffer(DRAW_HISTORY_MAX, 1, 1);
   size_t drawHistoryStart = 0;
   size_t drawHistoryEnd = 0;
-  size_t drawHistoryUndoCount = 0;
+  size_t drawStrokeCount = 0;
+  struct draw_stroke *currStroke = NULL;
+  size_t drawUndoCount = 0;
+
+  // draw textures
   RenderTexture2D drawTarget = LoadRenderTexture(srcWidth, srcHeight);
   RenderTexture2D permDrawTarget = LoadRenderTexture(srcWidth, srcHeight);
+
+  // curr draw information
   Color drawColors[] = {RED, GREEN, BLUE, WHITE, BLACK};
   int drawColorSelected = 0;
   float brushDrawSize = DEFAULT_DRAW_SIZE;
@@ -176,10 +321,9 @@ int main(int argc, char *argv[]) {
 
   // mouse
   Vector2 mousePos = {0, 0};
-  Vector2 prevMouseWorldPos = {0, 0};
   Vector2 mouseWorldPos = {0, 0};
 
-  while (!WindowShouldClose()) {
+  for (;!WindowShouldClose();) {
     // retake screenshot
     if (IsKeyPressed(KEY_T)) {
       UnloadTexture(screenTexture);
@@ -236,7 +380,6 @@ int main(int argc, char *argv[]) {
     // mouse init
     Vector2 flipVector = Vector2One();
     mousePos = GetMousePosition();
-    prevMouseWorldPos = mouseWorldPos;
     mouseWorldPos = GetScreenToWorld2D(mousePos, camera);
 
     Vector2 delta = GetMouseDelta();
@@ -352,103 +495,123 @@ int main(int argc, char *argv[]) {
 
     // clear draw
     if (IsKeyPressed(KEY_C)) {
-      BeginTextureMode(drawTarget);
-      {
+      BeginTextureMode(drawTarget); {
         ClearBackground(BLANK);
-      }
-      EndTextureMode();
+      } EndTextureMode();
 
-      BeginTextureMode(permDrawTarget);
-      {
+      BeginTextureMode(permDrawTarget); {
         ClearBackground(BLANK);
-      }
-      EndTextureMode();
+      } EndTextureMode();
       drawHistoryStart = drawHistoryEnd;
     }
 
-    // redo/undo draw
-    if (IsKeyPressed(KEY_U) || IsKeyPressedRepeat(KEY_U)) {
-      if (IsKeyDown(KEY_LEFT_SHIFT)) { // redo
-        if (drawHistoryUndoCount > 0) {
-          drawHistoryUndoCount--;
-          drawHistoryEnd++;
-        }
-      } else { // undo
-        if (drawHistoryStart != drawHistoryEnd) {
-          drawHistoryUndoCount++;
-          if (drawHistoryEnd == 0) {
-            drawHistoryEnd = DRAW_HISTORY_SIZE - 1;
-          } else {
-            drawHistoryEnd = drawHistoryEnd - 1;
-          }
-        }
-      }
-
-      // redraw
-      BeginTextureMode(drawTarget);
-      {
-        ClearBackground(BLANK);
-
-        for (size_t i = drawHistoryStart;
-            i != drawHistoryEnd;
-            i = (i + 1) % DRAW_HISTORY_SIZE) {
-          struct draw_state *node = drawHistoryBuf + i;
-          Color color = node->color;
-          if (node->prezFlags & FLAGS_ERASE) { begin_erase_blend_mode(); }
-
-          DrawCircleV(node->end, node->brushDrawSize, color);
-          DrawLineEx(node->start, node->end,
-                     node->brushDrawSize * 2, color);
-
-          if (node->prezFlags & FLAGS_ERASE) { EndBlendMode(); }
+    // begin draw
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
+        && (currStroke == NULL || currStroke->length != 0)) {
+      if (currStroke != NULL) {
+        if (drawUndoCount == drawStrokeCount) { // if we removed all, then dont include the current
+          currStroke = NULL;
+          drawHistoryStart = 0;
+          drawHistoryEnd = 0;
+          drawStrokeCount = 0;
+          drawUndoCount = 0;
+        } else {
+          drawHistoryEnd = ((uint8_t *)NEXT_DRAW_STROKE(currStroke) - drawHistory) % DRAW_HISTORY_MAX;
+          drawStrokeCount -= drawUndoCount;
+          drawUndoCount = 0;
         }
       }
-      EndTextureMode();
+
+      struct draw_stroke *tempStroke = currStroke;
+      currStroke =
+        alloc_draw_history(drawHistory, &drawHistoryStart, &drawHistoryEnd,
+                           &drawStrokeCount, permDrawTarget, sizeof(struct draw_stroke));
+      currStroke->previous = tempStroke;
+      currStroke->info.color = drawColors[drawColorSelected];
+      currStroke->info.prezFlags = prezFlags;
+      currStroke->info.brushDrawSize = brushDrawSize;
+      currStroke->length = 0;
+
+      drawStrokeCount++;
     }
 
     // draw
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)
-        && (mouseWorldPos.x != prevMouseWorldPos.y
-          || mouseWorldPos.y != prevMouseWorldPos.y)) {
-      drawHistoryBuf[drawHistoryEnd].color = drawColors[drawColorSelected];
-      drawHistoryBuf[drawHistoryEnd].prezFlags = prezFlags;
-      drawHistoryBuf[drawHistoryEnd].brushDrawSize = brushDrawSize;
-      drawHistoryBuf[drawHistoryEnd].start = prevMouseWorldPos;
-      drawHistoryBuf[drawHistoryEnd].end = mouseWorldPos;
+        && drawHistoryStart != drawHistoryEnd) {
+      // ran out of space for the current stroke, we only had one stroke
+      if (NEXT_DRAW_STROKE_OFFSET(currStroke) + sizeof(Vector2) >= DRAW_HISTORY_MAX)
+      {
+        Vector2 prev_point = *GET_LAST_BUFFER_DRAW_STROKE(currStroke);
 
-      drawHistoryEnd = (drawHistoryEnd + 1) % DRAW_HISTORY_SIZE;
-      if (drawHistoryStart == (drawHistoryEnd + 1) % DRAW_HISTORY_SIZE) { // buffer is full
-        BeginTextureMode(permDrawTarget);
-        {
-          size_t skip_size = DRAW_HISTORY_SIZE / 3;
-          for (size_t i = 0; i < skip_size; i++) { // force save portion of the buffer
-            struct draw_state *node = &drawHistoryBuf[drawHistoryStart];
+        // render out the buffer
+        render_oldest_stroke(permDrawTarget, drawHistory, &drawHistoryStart, &drawStrokeCount);
 
-            if (node->prezFlags & FLAGS_ERASE) { begin_erase_blend_mode(); }
+        // rebegin draw
+        currStroke =
+          alloc_draw_history(drawHistory, &drawHistoryStart, &drawHistoryEnd,
+                             &drawStrokeCount, permDrawTarget, sizeof(struct draw_stroke));
+        currStroke->previous = NULL;
+        currStroke->info.color = drawColors[drawColorSelected];
+        currStroke->info.prezFlags = prezFlags;
+        currStroke->info.brushDrawSize = brushDrawSize;
+        currStroke->length = 1;
 
-            DrawCircleV(node->end, node->brushDrawSize, node->color);
-            DrawLineEx(node->start, node->end,
-                       node->brushDrawSize * 2, node->color);
+        // copy previous point
+        Vector2 *a_prev_point =
+          alloc_draw_history(drawHistory, &drawHistoryStart, &drawHistoryEnd,
+                             &drawStrokeCount, permDrawTarget, sizeof(Vector2));
+        *a_prev_point = prev_point;
 
-            if (node->prezFlags & FLAGS_ERASE) { EndBlendMode(); }
+        drawStrokeCount++;
+      }
 
-            drawHistoryStart = (drawHistoryStart + 1) % DRAW_HISTORY_SIZE;
+      // create a new sample point
+      Vector2 *ap =
+        alloc_draw_history(drawHistory, &drawHistoryStart, &drawHistoryEnd,
+                           &drawStrokeCount, permDrawTarget, sizeof(Vector2));
+
+      *ap = mouseWorldPos;
+      currStroke->length++;
+
+      // render a line segment if possible
+      if (currStroke->length >= 2) {
+        render_stroke_segment(drawTarget, currStroke->info, *(ap - 1), *ap);
+      }
+    } else {
+      // will not happen during a draw
+      // redo/undo draw
+      if ((IsKeyPressed(KEY_U) || IsKeyPressedRepeat(KEY_U)) && currStroke != NULL) {
+        if (IsKeyDown(KEY_LEFT_SHIFT)) { // redo
+          if (drawUndoCount == drawStrokeCount) {
+            render_stroke(drawTarget, currStroke);
+            drawUndoCount--;
+          } else if (drawUndoCount > 0) {
+            currStroke = NEXT_DRAW_STROKE(currStroke);
+            render_stroke(drawTarget, currStroke);
+            drawUndoCount--;
+          }
+        } else { // undo
+          if (drawUndoCount < drawStrokeCount) {
+            drawUndoCount++;
+
+            if (currStroke->previous != NULL) { currStroke = currStroke->previous; }
+
+            BeginTextureMode(drawTarget); {
+              ClearBackground(BLANK);
+            } EndTextureMode();
+
+            // re-render entire set
+            struct draw_stroke *tempStroke =
+              (struct draw_stroke *)(drawHistory + drawHistoryStart);
+            for (size_t i = 0;
+                i < drawStrokeCount - drawUndoCount;
+                i++) {
+              render_stroke(drawTarget, tempStroke);
+              tempStroke = NEXT_DRAW_STROKE(tempStroke);
+            }
           }
         }
-        EndTextureMode();
       }
-
-      Color color = drawColors[drawColorSelected];
-      BeginTextureMode(drawTarget);
-      {
-        if (prezFlags & FLAGS_ERASE) { begin_erase_blend_mode(); }
-
-        DrawCircleV(mouseWorldPos, brushDrawSize, color);
-        DrawLineEx(prevMouseWorldPos, mouseWorldPos, brushDrawSize * 2, color);
-
-        if (prezFlags & FLAGS_ERASE) { EndBlendMode(); }
-      }
-      EndTextureMode();
     }
 
     // flashlight
@@ -474,8 +637,7 @@ int main(int argc, char *argv[]) {
     {
       ClearBackground(BLACK);
 
-      BeginMode2D(camera);
-      {
+      BeginMode2D(camera); {
         DrawTextureRec(screenTexture,
                        (Rectangle){0, 0, srcWidth * flipVector.x,
                                    OS_VERTICAL_FLIP * srcHeight * flipVector.y},
@@ -490,26 +652,25 @@ int main(int argc, char *argv[]) {
                                    drawTarget.texture.width * flipVector.x,
                                    -drawTarget.texture.height * flipVector.y},
                        (Vector2){0, 0}, WHITE);
-      }
-      EndMode2D();
+      } EndMode2D();
 
       // flashlight
       if (prezFlags & FLAGS_FLASHLIGHT) {
-        BeginShaderMode(shdrFlashlight);
-        DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
-        EndShaderMode();
+        BeginShaderMode(shdrFlashlight); {
+          DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
+        } EndShaderMode();
       }
       // highlight
       if (prezFlags & FLAGS_HIGHLIGHT) {
-        BeginShaderMode(shdrHighlight);
-        DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
-        EndShaderMode();
+        BeginShaderMode(shdrHighlight); {
+          DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
+        } EndShaderMode();
       }
       // brush preview
       if (prezFlags & FLAGS_BRUSH_PREVIEW) {
-        BeginShaderMode(shdrBrushPreview);
-        DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
-        EndShaderMode();
+        BeginShaderMode(shdrBrushPreview); {
+          DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
+        } EndShaderMode();
       }
     }
     EndDrawing();
@@ -517,52 +678,7 @@ int main(int argc, char *argv[]) {
   UnloadTexture(screenTexture);
   UnloadRenderTexture(drawTarget);
 
+  retval = EXIT_SUCCESS;
   CloseWindow();
-  return EXIT_SUCCESS;
-}
-
-void setup_light_shader(Shader shader, struct light *l) {
-  l->posLoc = GetShaderLocation(shader, "flashlight.pos");
-  l->colorLoc = GetShaderLocation(shader, "flashlight.color");
-  l->innerLoc = GetShaderLocation(shader, "flashlight.inner");
-  l->innerAlphaLoc = GetShaderLocation(shader, "flashlight.innerAlpha");
-  l->outerLoc = GetShaderLocation(shader, "flashlight.outer");
-  l->outerAlphaLoc = GetShaderLocation(shader, "flashlight.outerAlpha");
-
-  SetShaderValue(shader, l->posLoc, &l->pos, SHADER_UNIFORM_VEC2);
-  SetShaderValue(shader, l->colorLoc, &l->color, SHADER_UNIFORM_VEC3);
-  SetShaderValue(shader, l->innerAlphaLoc, &l->innerAlpha,
-                 SHADER_UNIFORM_FLOAT);
-  SetShaderValue(shader, l->outerAlphaLoc, &l->outerAlpha,
-                 SHADER_UNIFORM_FLOAT);
-  SetShaderValue(shader, l->innerLoc, &l->inner, SHADER_UNIFORM_FLOAT);
-  SetShaderValue(shader, l->outerLoc, &l->outer, SHADER_UNIFORM_FLOAT);
-}
-
-void screenshot_as_texture(unsigned char *data, int srcWidth, int srcHeight,
-                           Texture *screenTexture) {
-  screenTexture->width = srcWidth;
-  screenTexture->height = srcHeight;
-  screenTexture->format = RL_PIXEL_FORMAT; // WARN(andrew): wrong one
-  screenTexture->mipmaps = 1;
-  glBindTexture(GL_TEXTURE_2D, 0); // Free any old binding
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-  glGenTextures(1, &screenTexture->id); // Generate texture id
-  glBindTexture(GL_TEXTURE_2D, screenTexture->id);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, screenTexture->width,
-               screenTexture->height, 0, PIXEL_FORMAT, GL_UNSIGNED_BYTE, data);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glBindTexture(GL_TEXTURE_2D, 0);
-  free(data);
-}
-
-void begin_erase_blend_mode() {
-  rlSetBlendFactorsSeparate(
-      RL_ZERO, RL_ONE_MINUS_SRC_ALPHA,
-      RL_ZERO, RL_ONE_MINUS_SRC_ALPHA,
-      RL_FUNC_ADD, RL_FUNC_ADD);
-  BeginBlendMode(BLEND_CUSTOM_SEPARATE);
+  return retval;
 }

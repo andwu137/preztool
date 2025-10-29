@@ -1,7 +1,7 @@
 RAYLIB ?= ./vendor/raylib/src/
 FILES = preztool.c
 LIBRARIES = -lraylib
-FLAGS = -march=native -O3 -Wall -Wextra\
+FLAGS = -Wall -Wextra -Wpedantic
 
 ifeq ($(OS),Windows_NT)
 	LIBRARIES += -lgdi32 -lwinmm
@@ -19,6 +19,12 @@ endif
 
 ifneq ($(STATIC_LINK_RAYLIB),)
 	LIBRARIES += -I $(RAYLIB) -L $(RAYLIB)
+endif
+
+ifneq ($(DEBUG),)
+	FLAGS += -march=native -Og -g
+else
+	FLAGS += -march=native -O3
 endif
 
 all:
