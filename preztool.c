@@ -181,8 +181,7 @@ static inline void render_stroke_segment(
 
 static inline void render_stroke(
     RenderTexture2D target,
-    struct draw_stroke *s)
-{
+    struct draw_stroke *s) {
   Vector2 *start_p = GET_BUFFER_DRAW_STROKE(s);
   for (size_t i = 1;
       i < s->length;
@@ -195,8 +194,7 @@ static inline void render_oldest_stroke(
     RenderTexture2D target,
     uint8_t *drawHistory,
     size_t *drawHistoryStart,
-    size_t *drawStrokeCount)
-{
+    size_t *drawStrokeCount) {
   // render the old stroke to permanent memory
   struct draw_stroke *old_s = (struct draw_stroke *)(drawHistory + *drawHistoryStart);
   render_stroke(target, old_s);
@@ -327,15 +325,13 @@ int main(
     // retake screenshot
     if (IsKeyPressed(KEY_T)) {
       UnloadTexture(screenTexture);
-      SetWindowState(FLAG_WINDOW_HIDDEN);
-      {
+      SetWindowState(FLAG_WINDOW_HIDDEN); {
         WaitTime((double)3 / 30); // WARN(andrew): this could fail to wait for
                                   // the display to fully finish updating
         // PERF(andrew): should use shm, but the docs suck
         screenshot(&data, &srcWidth, &srcHeight);
         screenshot_as_texture(data, srcWidth, srcHeight, &screenTexture);
-      }
-      ClearWindowState(FLAG_WINDOW_HIDDEN);
+      } ClearWindowState(FLAG_WINDOW_HIDDEN);
       SetWindowPosition(0, 0);
     }
 
@@ -539,8 +535,7 @@ int main(
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)
         && drawHistoryStart != drawHistoryEnd) {
       // ran out of space for the current stroke, we only had one stroke
-      if (NEXT_DRAW_STROKE_OFFSET(currStroke) + sizeof(Vector2) >= DRAW_HISTORY_MAX)
-      {
+      if (NEXT_DRAW_STROKE_OFFSET(currStroke) + sizeof(Vector2) >= DRAW_HISTORY_MAX) {
         Vector2 prev_point = *GET_LAST_BUFFER_DRAW_STROKE(currStroke);
 
         // render out the buffer
@@ -633,8 +628,7 @@ int main(
                    SHADER_UNIFORM_VEC2);
 
     // render
-    BeginDrawing();
-    {
+    BeginDrawing(); {
       ClearBackground(BLACK);
 
       BeginMode2D(camera); {
@@ -672,8 +666,7 @@ int main(
           DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
         } EndShaderMode();
       }
-    }
-    EndDrawing();
+    } EndDrawing();
   }
   UnloadTexture(screenTexture);
   UnloadRenderTexture(drawTarget);

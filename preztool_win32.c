@@ -64,8 +64,8 @@ void *make_circular_vmem_buffer(
     unsigned int below) {
   // TODO(andrew): setup circular buffer
   __builtin_trap();
-  exit(-1);
-  return NULL;
+  exit(-1); // does not emit
+  return NULL; // does not emit
 }
 
 #endif // PREZTOOL_WIN32_C
