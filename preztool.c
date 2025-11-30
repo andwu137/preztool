@@ -245,15 +245,19 @@ int main(
 
   // start window
   SetConfigFlags(FLAG_WINDOW_UNDECORATED | FLAG_WINDOW_TOPMOST |
-                 FLAG_BORDERLESS_WINDOWED_MODE | FLAG_MSAA_4X_HINT);
+                 FLAG_BORDERLESS_WINDOWED_MODE | FLAG_MSAA_4X_HINT |
+                 FLAG_VSYNC_HINT);
   InitWindow(srcWidth, srcHeight, "preztool");
   SetWindowPosition(0, 0);
-  SetTargetFPS(60);
+  // SetTargetFPS(60);
 
   Texture screenTexture = {0};
   screenshot_as_texture(data, srcWidth, srcHeight, &screenTexture);
 
   /* prez data */
+  int windowWidth = GetRenderWidth();
+  int windowHeight = GetRenderHeight();
+
   uint32_t prezFlags = 0;
   // camera
   Camera2D camera = {0};
@@ -268,6 +272,7 @@ int main(
   size_t drawUndoCount = 0;
 
   // draw textures
+  // TODO(andrew): ngl, we should be using a shader
   RenderTexture2D drawTarget = LoadRenderTexture(srcWidth, srcHeight);
   RenderTexture2D permDrawTarget = LoadRenderTexture(srcWidth, srcHeight);
 
@@ -282,10 +287,10 @@ int main(
   struct light flashlight = {
       .pos = {0, 0},
       .color = {0, 0, 0},
-      .inner = (float)srcWidth / 15,
+      .inner = (float)windowWidth / 20,
       .innerAlpha = 0.0,
-      .outer = (float)srcWidth / 15 * 1.5,
-      .outerAlpha = 1.0,
+      .outer = (float)windowWidth / 20 * 1.5,
+      .outerAlpha = 0.95,
   };
   setup_light_shader(shdrFlashlight, &flashlight);
 
@@ -295,9 +300,9 @@ int main(
   struct light highlight = {
       .pos = {0, 0},
       .color = {255, 255, 0},
-      .inner = (float)srcWidth / 100,
+      .inner = (float)windowWidth / 200,
       .innerAlpha = 0.8,
-      .outer = (float)srcWidth / 100 * 1.5,
+      .outer = (float)windowWidth / 200 * 1.5,
       .outerAlpha = 0.0,
   };
   setup_light_shader(shdrHighlight, &highlight);
@@ -322,6 +327,9 @@ int main(
   Vector2 mouseWorldPos = {0, 0};
 
   for (;!WindowShouldClose();) {
+    windowWidth = GetRenderWidth();
+    windowHeight = GetRenderHeight();
+
     // retake screenshot
     if (IsKeyPressed(KEY_T)) {
       UnloadTexture(screenTexture);
@@ -329,8 +337,8 @@ int main(
         WaitTime((double)3 / 30); // WARN(andrew): this could fail to wait for
                                   // the display to fully finish updating
         // PERF(andrew): should use shm, but the docs suck
-        screenshot(&data, &srcWidth, &srcHeight);
-        screenshot_as_texture(data, srcWidth, srcHeight, &screenTexture);
+        screenshot(&data, &windowWidth, &srcHeight);
+        screenshot_as_texture(data, windowWidth, srcHeight, &screenTexture);
       } ClearWindowState(FLAG_WINDOW_HIDDEN);
       SetWindowPosition(0, 0);
     }
@@ -348,8 +356,8 @@ int main(
       prezFlags ^= FLAGS_MIRROR_X;
 
       // for prev
-      mousePos.x = srcWidth - mousePos.x;
-      mouseWorldPos.x = srcWidth - mouseWorldPos.x;
+      mousePos.x = windowWidth - mousePos.x;
+      mouseWorldPos.x = windowWidth - mouseWorldPos.x;
     }
     if (IsKeyPressed(KEY_E)) {
       prezFlags ^= FLAGS_ERASE;
@@ -358,8 +366,8 @@ int main(
       prezFlags ^= FLAGS_MIRROR_Y;
 
       // for prev
-      mousePos.y = srcHeight - mousePos.y;
-      mouseWorldPos.y = srcHeight - mouseWorldPos.y;
+      mousePos.y = windowWidth - mousePos.y;
+      mouseWorldPos.y = windowHeight - mouseWorldPos.y;
     }
     if (!IsKeyDown(KEY_LEFT_SHIFT)) {
       if (IsKeyPressed(KEY_F)) {
@@ -383,13 +391,13 @@ int main(
 
     // flip
     if (prezFlags & FLAGS_MIRROR_X) {
-      mousePos.x = srcWidth - mousePos.x;
-      mouseWorldPos.x = srcWidth - mouseWorldPos.x;
+      mousePos.x = windowWidth - mousePos.x;
+      mouseWorldPos.x = windowWidth - mouseWorldPos.x;
       flipVector.x = -1;
     }
     if (prezFlags & FLAGS_MIRROR_Y) {
-      mousePos.y = srcHeight - mousePos.y;
-      mouseWorldPos.y = srcHeight - mouseWorldPos.y;
+      mousePos.y = windowHeight - mousePos.y;
+      mouseWorldPos.y = windowHeight - mouseWorldPos.y;
       flipVector.y = -1;
     }
     Vector2Multiply(delta, flipVector);
@@ -609,32 +617,14 @@ int main(
       }
     }
 
-    // flashlight
-    flashlight.pos = GetMousePosition();
-    flashlight.pos.y = srcHeight - flashlight.pos.y;
-    SetShaderValue(shdrFlashlight, flashlight.posLoc, &flashlight.pos,
-                   SHADER_UNIFORM_VEC2);
-
-    // highlight
-    highlight.pos = GetMousePosition();
-    highlight.pos.y = srcHeight - highlight.pos.y;
-    SetShaderValue(shdrHighlight, highlight.posLoc, &highlight.pos,
-                   SHADER_UNIFORM_VEC2);
-
-    // brush preview
-    brushPreview.pos = GetMousePosition();
-    brushPreview.pos.y = srcHeight - brushPreview.pos.y;
-    SetShaderValue(shdrBrushPreview, brushPreview.posLoc, &brushPreview.pos,
-                   SHADER_UNIFORM_VEC2);
-
     // render
     BeginDrawing(); {
       ClearBackground(BLACK);
 
       BeginMode2D(camera); {
         DrawTextureRec(screenTexture,
-                       (Rectangle){0, 0, srcWidth * flipVector.x,
-                                   OS_VERTICAL_FLIP * srcHeight * flipVector.y},
+                       (Rectangle){0, 0, windowWidth * flipVector.x,
+                                   OS_VERTICAL_FLIP * windowHeight * flipVector.y},
                        (Vector2){0, 0}, WHITE);
         DrawTextureRec(permDrawTarget.texture,
                        (Rectangle){0, 0,
@@ -650,20 +640,35 @@ int main(
 
       // flashlight
       if (prezFlags & FLAGS_FLASHLIGHT) {
+        flashlight.pos = GetMousePosition();
+        flashlight.pos.y = windowHeight - flashlight.pos.y;
+        SetShaderValue(shdrFlashlight, flashlight.posLoc, &flashlight.pos,
+                       SHADER_UNIFORM_VEC2);
+
         BeginShaderMode(shdrFlashlight); {
-          DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
+          DrawRectangle(0, 0, windowWidth, windowHeight, WHITE);
         } EndShaderMode();
       }
       // highlight
       if (prezFlags & FLAGS_HIGHLIGHT) {
+        highlight.pos = GetMousePosition();
+        highlight.pos.y = windowHeight - highlight.pos.y;
+        SetShaderValue(shdrHighlight, highlight.posLoc, &highlight.pos,
+                       SHADER_UNIFORM_VEC2);
+
         BeginShaderMode(shdrHighlight); {
-          DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
+          DrawRectangle(0, 0, windowWidth, windowHeight, WHITE);
         } EndShaderMode();
       }
       // brush preview
       if (prezFlags & FLAGS_BRUSH_PREVIEW) {
+        brushPreview.pos = GetMousePosition();
+        brushPreview.pos.y = windowHeight - brushPreview.pos.y;
+        SetShaderValue(shdrBrushPreview, brushPreview.posLoc, &brushPreview.pos,
+                       SHADER_UNIFORM_VEC2);
+
         BeginShaderMode(shdrBrushPreview); {
-          DrawRectangle(0, 0, srcWidth, srcHeight, WHITE);
+          DrawRectangle(0, 0, windowWidth, windowHeight, WHITE);
         } EndShaderMode();
       }
     } EndDrawing();
