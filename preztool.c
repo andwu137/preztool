@@ -287,9 +287,9 @@ int main(
   struct light flashlight = {
       .pos = {0, 0},
       .color = {0, 0, 0},
-      .inner = (float)windowWidth / 20,
+      .inner = (float)srcWidth / 20,
       .innerAlpha = 0.0,
-      .outer = (float)windowWidth / 20 * 1.5,
+      .outer = (float)srcWidth / 20 * 1.5,
       .outerAlpha = 0.95,
   };
   setup_light_shader(shdrFlashlight, &flashlight);
@@ -300,9 +300,9 @@ int main(
   struct light highlight = {
       .pos = {0, 0},
       .color = {255, 255, 0},
-      .inner = (float)windowWidth / 200,
+      .inner = (float)srcWidth / 200,
       .innerAlpha = 0.8,
-      .outer = (float)windowWidth / 200 * 1.5,
+      .outer = (float)srcWidth / 200 * 1.5,
       .outerAlpha = 0.0,
   };
   setup_light_shader(shdrHighlight, &highlight);
@@ -337,7 +337,7 @@ int main(
         WaitTime((double)3 / 30); // WARN(andrew): this could fail to wait for
                                   // the display to fully finish updating
         // PERF(andrew): should use shm, but the docs suck
-        screenshot(&data, &windowWidth, &srcHeight);
+        screenshot(&data, &srcWidth, &srcHeight);
         screenshot_as_texture(data, windowWidth, srcHeight, &screenTexture);
       } ClearWindowState(FLAG_WINDOW_HIDDEN);
       SetWindowPosition(0, 0);
@@ -623,8 +623,8 @@ int main(
 
       BeginMode2D(camera); {
         DrawTextureRec(screenTexture,
-                       (Rectangle){0, 0, windowWidth * flipVector.x,
-                                   OS_VERTICAL_FLIP * windowHeight * flipVector.y},
+                       (Rectangle){0, 0, srcWidth * flipVector.x,
+                                   OS_VERTICAL_FLIP * srcHeight * flipVector.y},
                        (Vector2){0, 0}, WHITE);
         DrawTextureRec(permDrawTarget.texture,
                        (Rectangle){0, 0,
