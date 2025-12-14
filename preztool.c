@@ -506,7 +506,14 @@ int main(
       BeginTextureMode(permDrawTarget); {
         ClearBackground(BLANK);
       } EndTextureMode();
-      drawHistoryStart = drawHistoryEnd;
+
+      // TODO(andrew): add clear to the undo graph
+      // HACK(andrew): just delete all history for now
+      currStroke = 0;
+      drawUndoCount =
+        drawHistoryStart =
+        drawHistoryEnd =
+        drawStrokeCount = 0;
     }
 
     // begin draw
